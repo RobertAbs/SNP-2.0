@@ -12,7 +12,13 @@ import KpiCard from "@/components/common/KpiCard";
 import EmptyState from "@/components/common/EmptyState";
 import { usePirPsd } from "@/hooks/usePirPsd";
 import { usePirWeights } from "@/hooks/usePirWeights";
-import { activeStageCount, avgReadiness, avgStagePct, computeTotalReadiness, fmtDate, fmtNum, uniq } from "@/lib/dataHelpers";
+import { activeStageCount, avgStagePct, fmtDate, fmtNum, uniq } from "@/lib/dataHelpers";
+import type { PirRow as _PR } from "@/lib/types";
+function avgReadiness2(rows: _PR[]): string {
+  if (rows.length === 0) return "0,00";
+  const s = rows.reduce((a, r) => a + r.totalReadiness, 0) / rows.length;
+  return s.toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 import { PIR_STAGE_LABELS, PirRow, PirStage } from "@/lib/types";
 
 const STAGES: PirStage[] = ["ird", "izyskaniya", "proektirovanie", "soglasovaniya", "zemleustroistvo", "ekspertiza"];
@@ -62,14 +68,8 @@ function PirPsdPage() {
     if (r) setRegionFilter(r);
   }, [sp]);
 
-  const rawRows = pir.data ?? [];
+  const rows = pir.data ?? [];
   const w = weights.data ?? [];
-  const rows = useMemo(
-    () => (w.length === 0
-      ? rawRows
-      : rawRows.map(r => ({ ...r, totalReadiness: computeTotalReadiness(r, w) }))),
-    [rawRows, w]
-  );
 
   // Опции фильтров
   const regionOptions = useMemo(
@@ -196,14 +196,32 @@ function PirPsdPage() {
         onRefresh={pir.refresh}
       />
 
-      {/* Статичные KPI — всегда по всему проекту */}
+      {/* KPI — реагируют на фильтры */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-        <KpiCard label="Кол-во СНП" value={fmtNum(rows.length)} hint="всего по проекту" color="#10b981" />
-        <KpiCard label="Областей" value={regionOptions.length} hint="регионов" color="#06b6d4" />
-        <KpiCard label="Районов"
-          value={uniq(rows.map(r => r.district)).filter(Boolean).length}
-          hint="административных" color="#f59e0b" />
-        <KpiCard label="AVG готовность" value={`${avgReadiness(rows)}%`} hint="суммарная" color="#8b5cf6" />
+        <KpiCard
+          label="Кол-во СНП"
+          value={fmtNum(filtered.length)}
+          hint={hasFilters ? `из ${fmtNum(rows.length)} по выборке` : "всего по проекту"}
+          color="#10b981"
+        />
+        <KpiCard
+          label="Областей"
+          value={uniq(filtered.map(r => r.region)).filter(Boolean).length}
+          hint={hasFilters ? "в выборке" : "регионов"}
+          color="#06b6d4"
+        />
+        <KpiCard
+          label="Районов"
+          value={uniq(filtered.map(r => r.district)).filter(Boolean).length}
+          hint={hasFilters ? "в выборке" : "административных"}
+          color="#f59e0b"
+        />
+        <KpiCard
+          label="AVG готовность"
+          value={`${avgReadiness2(filtered)}%`}
+          hint={hasFilters ? "по выборке" : "суммарная"}
+          color="#8b5cf6"
+        />
       </div>
 
       {rows.length === 0 ? (
@@ -280,7 +298,7 @@ function PirPsdPage() {
               <div className="ml-auto text-[10px] font-mono" style={{ color: "var(--c-text-3)" }}>
                 найдено: <span style={{ color: "var(--c-text-1)" }}>{fmtNum(filtered.length)}</span> из {fmtNum(rows.length)}
                 {filtered.length > 0 && (
-                  <> · средняя <span style={{ color: "#8b5cf6" }}>{avgReadiness(filtered)}%</span></>
+                  <> · средняя <span style={{ color: "#8b5cf6" }}>{avgReadiness2(filtered)}%</span></>
                 )}
               </div>
             </div>
@@ -306,37 +324,47 @@ function PirPsdPage() {
           </div>
 
           {/* Прогресс по этапам — отражает отфильтрованную выборку */}
-          <div className="rounded-lg p-4 mb-5"
+          <div className="rounded-lg p-6 mb-5"
             style={{ background: "var(--c-bg-1)", border: "1px solid var(--c-border)" }}>
-            <div className="flex items-baseline justify-between mb-3">
-              <div className="text-[11px] uppercase tracking-wider font-semibold" style={{ color: "var(--c-text-3)" }}>
+            <div className="flex items-baseline justify-between mb-5">
+              <div className="text-sm uppercase tracking-wider font-semibold" style={{ color: "var(--c-text-2)" }}>
                 Прогресс по видам работ
               </div>
-              <div className="text-[10px]" style={{ color: "var(--c-text-4)" }}>
+              <div className="text-xs" style={{ color: "var(--c-text-4)" }}>
                 {hasFilters ? "по выбранной выборке" : "по всем СНП"}
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-5">
               {STAGES.map(stage => {
                 const weight = w.find(x => x.stage === stage);
                 const v = avgStagePct(filtered, stage);
                 const active = activeStageCount(filtered, stage);
                 const pctActive = filtered.length ? Math.round((active / filtered.length) * 100) : 0;
                 return (
-                  <div key={stage} className="flex items-center gap-2 text-xs">
-                    <div className="w-56 truncate" style={{ color: "var(--c-text-2)" }}>
-                      {PIR_STAGE_LABELS[stage]}
-                      {weight && <span className="text-[9px] ml-1" style={{ color: "var(--c-text-4)" }}>вес {(weight.weight * 100).toFixed(0)}%</span>}
+                  <div key={stage}>
+                    <div className="flex items-baseline justify-between mb-2 gap-3">
+                      <div className="flex items-baseline gap-2 min-w-0">
+                        <span className="text-sm font-medium truncate" style={{ color: "var(--c-text-1)" }}>
+                          {PIR_STAGE_LABELS[stage]}
+                        </span>
+                        {weight && (
+                          <span className="text-[11px] flex-shrink-0" style={{ color: "var(--c-text-4)" }}>
+                            вес {(weight.weight * 100).toFixed(0)}%
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-baseline gap-3 flex-shrink-0">
+                        <span className="text-lg font-bold font-mono tabular-nums" style={{ color: "#10b981" }}>
+                          {v < 1 ? v.toFixed(1) : Math.round(v)}%
+                        </span>
+                        <span className="text-[11px] font-mono tabular-nums" style={{ color: "var(--c-text-4)" }}>
+                          {fmtNum(active)} акт.
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex-1 h-1.5 rounded-full overflow-hidden relative" style={{ background: "var(--c-bg-2)" }}>
+                    <div className="h-2.5 rounded-full overflow-hidden relative" style={{ background: "var(--c-bg-2)" }}>
                       <div className="h-full absolute inset-y-0 left-0" style={{ width: `${pctActive}%`, background: "color-mix(in srgb, #10b981 25%, transparent)" }} />
-                      <div className="h-full absolute inset-y-0 left-0" style={{ width: `${Math.min(v, 100)}%`, background: "#10b981" }} />
-                    </div>
-                    <div className="font-mono tabular-nums w-10 text-right text-[10px]" style={{ color: "var(--c-text-1)" }}>
-                      {v < 1 ? v.toFixed(1) : Math.round(v)}%
-                    </div>
-                    <div className="font-mono tabular-nums w-14 text-right text-[9px]" style={{ color: "var(--c-text-4)" }}>
-                      {fmtNum(active)} акт.
+                      <div className="h-full absolute inset-y-0 left-0 rounded-full" style={{ width: `${Math.min(v, 100)}%`, background: "#10b981" }} />
                     </div>
                   </div>
                 );

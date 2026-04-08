@@ -14,7 +14,7 @@ const navItems = [
   { href: "/",         label: "Главная",             icon: LayoutDashboard },
   { href: "/pir-psd",  label: "ПИР-ПСД",             icon: FileText },
   { href: "/smr",      label: "СМР (ВОЛС)",          icon: HardHat },
-  { href: "/gu",       label: "ГУ Пункты пропуска",  icon: Building2 },
+  { href: "/gu",       label: "ТП/ПП",  icon: Building2 },
 ];
 
 export default function Sidebar() {

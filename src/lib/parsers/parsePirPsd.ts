@@ -117,6 +117,7 @@ function buildHeader(sec: string[], sub: string[], typ: string[]): ParsedHeader 
   }
   if (plannedDate === -1)    plannedDate    = findSub("плановая дата завершения");
   if (totalReadiness === -1) totalReadiness = findSub("суммарная готов");
+  if (volsLengthCol === -1)  volsLengthCol  = 61;
 
   return {
     orderNo, pirYear, kato, region, district, ruralDistrict, snp,
@@ -124,6 +125,18 @@ function buildHeader(sec: string[], sub: string[], typ: string[]): ParsedHeader 
     plannedDate, totalReadiness, volsLengthCol,
   };
 }
+
+// Фиксированные колонки из листа (буквы → 0-based индексы)
+// S=18, X=23, AG=32, BB=53, BG=58, BI=60, BL=63
+const FIXED_STAGE_COL: Record<PirStage, number> = {
+  ird: 18,             // S
+  izyskaniya: 23,      // X
+  proektirovanie: 32,  // AG
+  soglasovaniya: 53,   // BB
+  zemleustroistvo: 58, // BG
+  ekspertiza: 60,      // BI
+};
+const FIXED_TOTAL_COL = 63; // BL
 
 export function parsePirPsdCSV(csv: string): PirRow[] {
   const rows = parseCSV(csv);
@@ -140,8 +153,13 @@ export function parsePirPsdCSV(csv: string): PirRow[] {
     const details = {} as Record<PirStage, PirStageDetail>;
 
     for (const st of Object.keys(stages) as PirStage[]) {
-      const pctCol = h.stagePctCols[st];
-      stages[st] = pctCol >= 0 ? parsePct(cols[pctCol]) : 0;
+      // 1) фиксированная колонка из листа (S/X/AG/BB/BG/BI)
+      // 2) fallback: авто-детект через "Общий статус выполнения"
+      const fixedCol = FIXED_STAGE_COL[st];
+      const fixedVal = fixedCol < cols.length ? parsePct(cols[fixedCol]) : 0;
+      const autoCol = h.stagePctCols[st];
+      const autoVal = autoCol >= 0 ? parsePct(cols[autoCol]) : 0;
+      stages[st] = fixedVal || autoVal;
       const items: PirStageItem[] = h.stageItems[st].map(it => ({
         name: it.name,
         info: (cols[it.infoCol] ?? "").trim(),
@@ -165,7 +183,8 @@ export function parsePirPsdCSV(csv: string): PirRow[] {
       details,
       volsLengthM:       h.volsLengthCol >= 0 ? ((cols[h.volsLengthCol] ?? "").trim()) : "",
       plannedCompletion: h.plannedDate >= 0 ? parseDate(cols[h.plannedDate]) : null,
-      totalReadiness:    h.totalReadiness >= 0 ? parsePct(cols[h.totalReadiness]) : 0,
+      totalReadiness:    (FIXED_TOTAL_COL < cols.length && parsePct(cols[FIXED_TOTAL_COL]))
+                            || (h.totalReadiness >= 0 ? parsePct(cols[h.totalReadiness]) : 0),
     });
   }
   return out;

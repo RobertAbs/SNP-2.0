@@ -37,13 +37,17 @@ export function parseVolsCSV(csv: string): VolsData {
     let id = 0;
     for (let i = dataStart; i < rows.length; i++) {
       const cols = rows[i];
+      const idRaw = (cols[0] ?? "").trim();
       const name = (cols[1] ?? "").trim();
       const lengthKm = parseNum(cols[2]);
       const yearRaw = (cols[3] ?? "").trim();
       const year = parseInt(yearRaw);
       if (!name || lengthKm <= 0) continue;
+      const level = idRaw ? idRaw.split(".").length : 0;
       out.push({
         id: ++id,
+        idRaw,
+        level,
         projectName: name,
         lengthKm,
         year: isNaN(year) ? null : year,

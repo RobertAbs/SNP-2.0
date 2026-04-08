@@ -50,12 +50,11 @@ export interface PirRow {
 }
 
 // ─── ГУ Пункты пропуска ─────────────────────────────────────────────
-export type GuSectionStatus = "completed" | "in_progress" | "in_progress_deadline";
+export type GuSectionStatus = "completed" | "in_progress";
 
 export const GU_SECTION_LABELS: Record<GuSectionStatus, string> = {
   completed: "Завершены работы",
   in_progress: "В производстве",
-  in_progress_deadline: "В производстве · со сроком СМР",
 };
 
 export interface GUCheckpoint {
@@ -68,6 +67,7 @@ export interface GUCheckpoint {
   volsStatus: string;        // Завершен / В работе / ...
   connectionStatus: string;  // Подключен / Наряд / ...
   psdReady: string;          // готов / не готов / ...
+  customerApproval: string | null; // Согласование Заказчика, ISO
   kvepDate: string | null;   // ISO YYYY-MM-DD
   sectionStatus: GuSectionStatus;
   sectionDeadline: string | null; // ISO если в секции был указан срок
@@ -76,6 +76,8 @@ export interface GUCheckpoint {
 // ─── ВОЛС ───────────────────────────────────────────────────────────
 export interface VolsRow {
   id: number;
+  idRaw: string;       // "1" / "1.1" / "1.1.5"
+  level: number;       // 1 = область, 2 = район, 3 = СНП
   projectName: string;
   lengthKm: number;
   year: number | null; // 2026 / 2027

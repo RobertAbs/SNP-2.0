@@ -38,36 +38,32 @@ export default function KpiCard({
           style={{ color }}
         />
       )}
-      <div className="pl-3">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-1.5 min-w-0">
-            {Icon && <Icon size={13} strokeWidth={2} style={{ color, flexShrink: 0 }} />}
-            <div className="text-[10px] uppercase tracking-wider font-semibold truncate" style={{ color: "var(--c-text-3)" }}>
-              {label}
-            </div>
+      <div className="pl-3 text-center">
+        <div className="flex items-center justify-center gap-1.5 mb-3 relative">
+          {Icon && <Icon size={13} strokeWidth={2} style={{ color, flexShrink: 0 }} />}
+          <div className="text-[10px] uppercase tracking-wider font-semibold truncate" style={{ color: "var(--c-text-3)" }}>
+            {label}
           </div>
           {trend && (
             <div
-              className="text-[10px] font-mono px-1.5 py-0.5 rounded flex-shrink-0"
+              className="absolute right-0 top-0 text-[10px] font-mono px-1.5 py-0.5 rounded"
               style={{ background: `color-mix(in srgb, ${color} 12%, transparent)`, color }}
             >
               {trend.startsWith("-") ? trend : `+${trend.replace(/^\+/, "")}%`}
             </div>
           )}
         </div>
-        <div className="flex items-end justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="text-[26px] leading-none font-bold tabular-nums" style={{ color: "var(--c-text-1)" }}>
-              {value}
-            </div>
-            {hint && (
-              <div className="text-[10px] mt-1 truncate" style={{ color: "var(--c-text-4)" }}>
-                {hint}
-              </div>
-            )}
+        <div className="flex flex-col items-center gap-1">
+          <div className="text-[26px] leading-none font-bold tabular-nums" style={{ color: "var(--c-text-1)" }}>
+            {value}
           </div>
+          {hint && (
+            <div className="text-[10px] mt-0.5 truncate max-w-full" style={{ color: "var(--c-text-4)" }}>
+              {hint}
+            </div>
+          )}
           {sparkData && (
-            <div className="w-14 h-8 flex-shrink-0">
+            <div className="w-full h-6 mt-1">
               <ResponsiveContainer>
                 <LineChart data={sparkData}>
                   <Line type="monotone" dataKey="v" stroke={color} strokeWidth={1.5} dot={false} />

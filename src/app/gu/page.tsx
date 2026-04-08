@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CheckCircle2, Clock, AlertCircle, Search, Cable, Plug, FileCheck, Calendar } from "lucide-react";
+import { CheckCircle2, Clock, Search, Cable, Plug, FileCheck } from "lucide-react";
 import PageHeader from "@/components/common/PageHeader";
 import KpiCard from "@/components/common/KpiCard";
 import EmptyState from "@/components/common/EmptyState";
@@ -12,7 +12,6 @@ import { GU_SECTION_LABELS, GuSectionStatus, GUCheckpoint } from "@/lib/types";
 const SECTION_COLORS: Record<GuSectionStatus, string> = {
   completed: "#10b981",
   in_progress: "#f59e0b",
-  in_progress_deadline: "#ec4899",
 };
 
 export default function GUPage() {
@@ -36,10 +35,6 @@ export default function GUPage() {
 
   const byDept = groupBy(filtered, r => r.department || "—");
 
-  // секция dealine: общий срок
-  const deadlineRow = rows.find(r => r.sectionStatus === "in_progress_deadline" && r.sectionDeadline);
-  const sectionDeadline = deadlineRow?.sectionDeadline ?? null;
-
   return (
     <div>
       <PageHeader
@@ -50,10 +45,10 @@ export default function GUPage() {
         onRefresh={gu.refresh}
       />
 
-      {/* Hero KPI: 4 крупных карточки с реальной композицией */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+      {/* Hero KPI: 3 карточки — всего / завершены / в работе */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
         <KpiCard
-          label="Всего ПП"
+          label="Всего ГУ ПП"
           value={fmtNum(kpi.total)}
           hint={kpi.fromSOI > 0 ? `${kpi.fromSOI} из исходного СОИ · ${kpi.total - kpi.fromSOI} новых` : "пунктов пропуска"}
           color="#06b6d4"
@@ -78,18 +73,10 @@ export default function GUPage() {
         <KpiCard
           label="В производстве"
           value={fmtNum(kpi.inProgress)}
-          hint="без жёсткого срока"
+          hint={`${kpi.total ? Math.round((kpi.inProgress / kpi.total) * 100) : 0}% в работе`}
           icon={Clock}
           color="#f59e0b"
           onClick={() => setStatusFilter("in_progress")}
-        />
-        <KpiCard
-          label="Срок СМР"
-          value={fmtNum(kpi.inProgressDeadline)}
-          hint={sectionDeadline ? `завершение к ${fmtDate(sectionDeadline)}` : "со сроком"}
-          icon={AlertCircle}
-          color="#ec4899"
-          onClick={() => setStatusFilter("in_progress_deadline")}
         />
       </div>
 
@@ -122,10 +109,8 @@ export default function GUPage() {
 
               {/* Segmented bar */}
               <div className="flex h-10 rounded-md overflow-hidden mb-3" style={{ border: "1px solid var(--c-border)" }}>
-                {(["completed", "in_progress", "in_progress_deadline"] as GuSectionStatus[]).map(st => {
-                  const count = st === "completed" ? kpi.completed
-                              : st === "in_progress" ? kpi.inProgress
-                              : kpi.inProgressDeadline;
+                {(["completed", "in_progress"] as GuSectionStatus[]).map(st => {
+                  const count = st === "completed" ? kpi.completed : kpi.inProgress;
                   if (count === 0) return null;
                   const width = (count / kpi.total) * 100;
                   return (
@@ -146,7 +131,7 @@ export default function GUPage() {
                 })}
               </div>
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px]" style={{ color: "var(--c-text-3)" }}>
-                {(["completed", "in_progress", "in_progress_deadline"] as GuSectionStatus[]).map(st => (
+                {(["completed", "in_progress"] as GuSectionStatus[]).map(st => (
                   <div key={st} className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-sm" style={{ background: SECTION_COLORS[st] }} />
                     <span>{GU_SECTION_LABELS[st]}</span>

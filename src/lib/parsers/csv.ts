@@ -36,7 +36,8 @@ export function parsePct(val: string | null | undefined): number {
   const s = val.toString().trim();
   if (!s) return 0;
   if (s.includes("%")) {
-    return Math.min(parseInt(s.replace(/[^0-9.-]/g, "")) || 0, 100);
+    const cleaned = s.replace(",", ".").replace(/[^0-9.-]/g, "");
+    return Math.min(Math.round(parseFloat(cleaned) || 0), 100);
   }
   const num = parseFloat(s.replace(",", "."));
   if (isNaN(num)) return 0;

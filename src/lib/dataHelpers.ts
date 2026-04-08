@@ -70,7 +70,7 @@ export function computeGuKpi(rows: GUCheckpoint[]): GuKpi {
   let volsCompleted = 0, connected = 0, psdReady = 0, fromSOI = 0, kvepThisQuarter = 0;
   for (const r of rows) {
     if (r.sectionStatus === "completed") completed++;
-    else if (r.sectionStatus === "in_progress_deadline") inProgressDeadline++;
+    // в новой схеме только 2 статуса; deadline больше не отдельный
     else inProgress++;
     if (r.volsStatus.toLowerCase().includes("заверш")) volsCompleted++;
     if (r.connectionStatus.toLowerCase().includes("подключ")) connected++;
