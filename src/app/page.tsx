@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { Home, MapPin, Building2, Radio, FileText, HardHat, ShieldCheck } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import PageHeader from "@/components/common/PageHeader";
@@ -81,6 +82,28 @@ export default function HomePage() {
       .map(r => ({ name: shortRegion(r.projectName), fullName: r.projectName, value: Math.round(r.lengthKm) }))
       .sort((a, b) => b.value - a.value);
   }, [volsData.rows]);
+
+  const [drillRegion, setDrillRegion] = useState<string | null>(null);
+
+  const readinessByDistrict = useMemo(() => {
+    if (!drillRegion) return [];
+    const m = new Map<string, { sum: number; n: number }>();
+    for (const r of pirRows) {
+      if (r.region !== drillRegion || !r.district) continue;
+      const cur = m.get(r.district) ?? { sum: 0, n: 0 };
+      cur.sum += r.totalReadiness;
+      cur.n += 1;
+      m.set(r.district, cur);
+    }
+    return Array.from(m.entries())
+      .map(([name, { sum, n }]) => ({
+        name,
+        fullName: name,
+        value: n ? Math.round((sum / n) * 100) / 100 : 0,
+        count: n,
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [pirRows, drillRegion]);
 
   const readinessByRegion = useMemo(() => {
     const m = new Map<string, { sum: number; n: number }>();
@@ -215,18 +238,38 @@ export default function HomePage() {
         className="rounded-lg p-4 mt-3"
         style={{ background: "var(--c-bg-1)", border: "1px solid var(--c-border)" }}
       >
-        <div className="flex items-baseline justify-between mb-3">
-          <div className="text-[11px] uppercase tracking-wider font-semibold" style={{ color: "var(--c-text-3)" }}>
-            Средняя готовность ПИР-ПСД по областям
+        <div className="flex items-baseline justify-between mb-3 gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            {drillRegion && (
+              <button
+                onClick={() => setDrillRegion(null)}
+                className="flex items-center gap-1 text-[10px] px-2 py-1 rounded hover:brightness-110"
+                style={{ background: "var(--c-bg-2)", border: "1px solid var(--c-border)", color: "var(--c-text-2)" }}
+              >
+                <ArrowLeft size={11} /> к областям
+              </button>
+            )}
+            <div className="text-[11px] uppercase tracking-wider font-semibold truncate" style={{ color: "var(--c-text-3)" }}>
+              {drillRegion
+                ? `Средняя готовность по районам · ${drillRegion}`
+                : "Средняя готовность ПИР-ПСД по областям"}
+            </div>
           </div>
-          <div className="text-[10px]" style={{ color: "var(--c-text-4)" }}>
-            всего по проекту: {pirDonePct}% · клик → фильтр
+          <div className="text-[10px] flex-shrink-0" style={{ color: "var(--c-text-4)" }}>
+            {drillRegion
+              ? `${readinessByDistrict.length} р-нов · клик → фильтр`
+              : `всего по проекту: ${pirDonePct}% · клик → район`}
           </div>
         </div>
-        <div style={{ width: "100%", height: Math.max(readinessByRegion.length * 28 + 40, 420) }}>
+        <div style={{
+          width: "100%",
+          height: drillRegion
+            ? Math.max(readinessByDistrict.length * 26 + 40, 320)
+            : Math.max(readinessByRegion.length * 28 + 40, 420),
+        }}>
           <ResponsiveContainer>
             <BarChart
-              data={readinessByRegion}
+              data={drillRegion ? readinessByDistrict : readinessByRegion}
               layout="vertical"
               margin={{ top: 5, right: 40, bottom: 5, left: 10 }}
             >
@@ -263,7 +306,14 @@ export default function HomePage() {
                 dataKey="value"
                 radius={[0, 4, 4, 0]}
                 style={{ cursor: "pointer" }}
-                onClick={(d: any) => d?.fullName && gotoRegion(d.fullName)}
+                onClick={(d: any) => {
+                  if (!d?.fullName) return;
+                  if (drillRegion) {
+                    router.push(`/pir-psd?region=${encodeURIComponent(drillRegion)}&district=${encodeURIComponent(d.fullName)}`);
+                  } else {
+                    setDrillRegion(d.fullName);
+                  }
+                }}
                 label={{
                   position: "right",
                   fill: "var(--c-text-2)",
@@ -271,7 +321,7 @@ export default function HomePage() {
                   formatter: (v: number) => `${v.toFixed(2)}%`,
                 }}
               >
-                {readinessByRegion.map((_, i) => (
+                {(drillRegion ? readinessByDistrict : readinessByRegion).map((_, i) => (
                   <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                 ))}
               </Bar>

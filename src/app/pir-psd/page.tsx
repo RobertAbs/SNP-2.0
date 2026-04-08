@@ -65,7 +65,9 @@ function PirPsdPage() {
   // Инициализация из ?region= (переход с главной)
   useEffect(() => {
     const r = sp.get("region");
+    const d = sp.get("district");
     if (r) setRegionFilter(r);
+    if (d) setTimeout(() => setDistrictFilter(d), 0);
   }, [sp]);
 
   const rows = pir.data ?? [];
