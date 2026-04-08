@@ -8,7 +8,7 @@ import { usePirPsd } from "@/hooks/usePirPsd";
 import { useSmr } from "@/hooks/useSmr";
 import { useGU } from "@/hooks/useGU";
 import { usePirWeights } from "@/hooks/usePirWeights";
-import { fmtNum, groupBy, activeStageCount, avgStagePct } from "@/lib/dataHelpers";
+import { fmtNum, groupBy, activeStageCount, avgStagePct, computeTotalReadiness } from "@/lib/dataHelpers";
 import { PIR_STAGE_LABELS, PirRow, PirStage, SmrRow } from "@/lib/types";
 
 const STAGES: PirStage[] = ["ird", "izyskaniya", "proektirovanie", "soglasovaniya", "zemleustroistvo", "ekspertiza"];
@@ -26,10 +26,18 @@ export default function HomePage() {
   const gu  = useGU();
   const weights = usePirWeights();
 
-  const pirRows: PirRow[] = pir.data ?? [];
+  const pirRaw: PirRow[] = pir.data ?? [];
   const smrRows: SmrRow[] = smr.data ?? [];
   const guRows = gu.data ?? [];
   const w = weights.data ?? [];
+
+  // Пересчёт суммарной готовности из 6 этапов × весов (лист "Вес ПИР")
+  const pirRows: PirRow[] = useMemo(
+    () => (w.length === 0
+      ? pirRaw
+      : pirRaw.map(r => ({ ...r, totalReadiness: computeTotalReadiness(r, w) }))),
+    [pirRaw, w]
+  );
 
   const [open, setOpen] = useState<number | null>(1);
   const toggle = (n: number) => setOpen(o => (o === n ? null : n));

@@ -1,30 +1,21 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
 import {
   useReactTable, getCoreRowModel, getFilteredRowModel, getSortedRowModel,
   getPaginationRowModel, flexRender, ColumnDef, SortingState,
 } from "@tanstack/react-table";
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-  LineChart, Line, Legend,
-} from "recharts";
-import { ChevronUp, ChevronDown, Search, ChevronRight, ArrowLeft, Check, X } from "lucide-react";
+import { ChevronUp, ChevronDown, Search, ChevronRight, Check, X, SlidersHorizontal } from "lucide-react";
 import PageHeader from "@/components/common/PageHeader";
 import KpiCard from "@/components/common/KpiCard";
 import EmptyState from "@/components/common/EmptyState";
 import { usePirPsd } from "@/hooks/usePirPsd";
 import { usePirWeights } from "@/hooks/usePirWeights";
-import { activeStageCount, avgReadiness, avgStagePct, fmtDate, fmtNum, groupBy, uniq } from "@/lib/dataHelpers";
+import { activeStageCount, avgReadiness, avgStagePct, computeTotalReadiness, fmtDate, fmtNum, uniq } from "@/lib/dataHelpers";
 import { PIR_STAGE_LABELS, PirRow, PirStage } from "@/lib/types";
 
 const STAGES: PirStage[] = ["ird", "izyskaniya", "proektirovanie", "soglasovaniya", "zemleustroistvo", "ekspertiza"];
-const STAGE_OPTIONS = [{ key: "all" as const, label: "Все этапы" }, ...STAGES.map(s => ({ key: s, label: PIR_STAGE_LABELS[s] }))];
-
-// Drill-down уровни: project → region → district → snp
-type DrillLevel = "project" | "region" | "district";
 
 export default function PirPsdPageWrapper() {
   return <Suspense fallback={null}><PirPsdPage /></Suspense>;
@@ -35,91 +26,94 @@ function PirPsdPage() {
   const weights = usePirWeights();
   const sp = useSearchParams();
 
-  // Drill-down state
-  const [drillRegion, setDrillRegion] = useState<string | null>(null);
-
-  // Init drill from ?region= param
-  useEffect(() => {
-    const r = sp.get("region");
-    if (r) setDrillRegion(r);
-  }, [sp]);
-
-  const [drillDistrict, setDrillDistrict] = useState<string | null>(null);
-
-  // Filters
-  const [stageFilter, setStageFilter] = useState<"all" | PirStage>("all");
+  // Фильтры
+  const [regionFilter, setRegionFilter] = useState<string>("");
+  const [districtFilter, setDistrictFilter] = useState<string>("");
   const [yearFilter, setYearFilter] = useState<string>("");
   const [search, setSearch] = useState("");
   const [sorting, setSorting] = useState<SortingState>([]);
 
-  const rows = pir.data ?? [];
+  // Доп. фильтры: диапазон общей готовности + фильтры по этапам
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [readinessBucket, setReadinessBucket] = useState<string>(""); // "", "0", "1-25", "26-50", "51-75", "76-99", "100"
+  const [stageBuckets, setStageBuckets] = useState<Record<PirStage, string>>({
+    ird: "", izyskaniya: "", proektirovanie: "", soglasovaniya: "", zemleustroistvo: "", ekspertiza: "",
+  });
+  const bucketMatch = (v: number, bucket: string): boolean => {
+    if (!bucket) return true;
+    if (bucket === "0") return v === 0;
+    if (bucket === "100") return v >= 100;
+    const [lo, hi] = bucket.split("-").map(Number);
+    return v >= lo && v <= hi;
+  };
+  const BUCKETS = [
+    { k: "", l: "любой" },
+    { k: "0", l: "= 0%" },
+    { k: "1-25", l: "1–25%" },
+    { k: "26-50", l: "26–50%" },
+    { k: "51-75", l: "51–75%" },
+    { k: "76-99", l: "76–99%" },
+    { k: "100", l: "= 100%" },
+  ];
+
+  // Инициализация из ?region= (переход с главной)
+  useEffect(() => {
+    const r = sp.get("region");
+    if (r) setRegionFilter(r);
+  }, [sp]);
+
+  const rawRows = pir.data ?? [];
   const w = weights.data ?? [];
+  const rows = useMemo(
+    () => (w.length === 0
+      ? rawRows
+      : rawRows.map(r => ({ ...r, totalReadiness: computeTotalReadiness(r, w) }))),
+    [rawRows, w]
+  );
 
-  const years = useMemo(() => uniq(rows.map(r => r.pirYear)).filter(Boolean).sort() as number[], [rows]);
+  // Опции фильтров
+  const regionOptions = useMemo(
+    () => uniq(rows.map(r => r.region)).filter(Boolean).sort(),
+    [rows]
+  );
+  const districtOptions = useMemo(
+    () => uniq(
+      rows.filter(r => !regionFilter || r.region === regionFilter).map(r => r.district)
+    ).filter(Boolean).sort(),
+    [rows, regionFilter]
+  );
+  const years = useMemo(
+    () => uniq(rows.map(r => r.pirYear)).filter(Boolean).sort() as number[],
+    [rows]
+  );
 
+  // Сброс района при смене области
+  useEffect(() => { setDistrictFilter(""); }, [regionFilter]);
+
+  // Отфильтрованные строки для таблицы и деталей
   const filtered = useMemo(() => {
     return rows.filter(r => {
-      if (drillRegion && r.region !== drillRegion) return false;
-      if (drillDistrict && r.district !== drillDistrict) return false;
+      if (regionFilter && r.region !== regionFilter) return false;
+      if (districtFilter && r.district !== districtFilter) return false;
       if (yearFilter && String(r.pirYear) !== yearFilter) return false;
       if (search) {
         const s = search.toLowerCase();
-        if (!r.snp.toLowerCase().includes(s) && !r.district.toLowerCase().includes(s)) return false;
+        if (!r.snp.toLowerCase().includes(s)
+          && !r.district.toLowerCase().includes(s)
+          && !r.region.toLowerCase().includes(s)) return false;
+      }
+      if (!bucketMatch(r.totalReadiness, readinessBucket)) return false;
+      for (const st of STAGES) {
+        if (!bucketMatch(r.stages[st] ?? 0, stageBuckets[st])) return false;
       }
       return true;
     });
-  }, [rows, drillRegion, drillDistrict, yearFilter, search]);
+  }, [rows, regionFilter, districtFilter, yearFilter, search, readinessBucket, stageBuckets]);
 
-  // — Drill уровень
-  const level: DrillLevel = drillDistrict ? "district" : drillRegion ? "region" : "project";
+  const activeMoreCount =
+    (readinessBucket ? 1 : 0) + Object.values(stageBuckets).filter(Boolean).length;
 
-  // — Bar chart: План vs Факт по группе
-  // План = 100%, Факт = текущий % (для выбранного этапа или сум.готовность)
-  const getPctForRow = (r: PirRow): number =>
-    stageFilter === "all" ? r.totalReadiness : (r.stages[stageFilter] ?? 0);
-
-  const barData = useMemo(() => {
-    let groups: Record<string, PirRow[]>;
-    if (level === "project") {
-      groups = groupBy(filtered, r => r.region || "—");
-    } else if (level === "region") {
-      groups = groupBy(filtered, r => r.district || "—");
-    } else {
-      groups = groupBy(filtered, r => r.snp || "—");
-    }
-    return Object.entries(groups)
-      .map(([name, items]) => ({
-        name: name.replace(/\s*область$/i, "").slice(0, 18),
-        fullName: name,
-        план: 100,
-        факт: Math.round(items.reduce((a, b) => a + getPctForRow(b), 0) / items.length),
-        count: items.length,
-      }))
-      .sort((a, b) => b.факт - a.факт)
-      .slice(0, level === "district" ? 20 : 50);
-  }, [filtered, level, stageFilter]);
-
-  // — Line chart: средний % по этапам (тренд по 6 этапам)
-  const lineData = useMemo(() => {
-    return STAGES.map(s => ({
-      этап: PIR_STAGE_LABELS[s],
-      факт: avgStagePct(filtered, s),
-      план: 100,
-    }));
-  }, [filtered]);
-
-  // — Drill click handler
-  const onBarClick = (data: any) => {
-    if (!data || !data.fullName) return;
-    if (level === "project") setDrillRegion(data.fullName);
-    else if (level === "region") setDrillDistrict(data.fullName);
-  };
-  const goBack = () => {
-    if (drillDistrict) setDrillDistrict(null);
-    else if (drillRegion) setDrillRegion(null);
-  };
-
-  // — Expandable rows
+  // Expandable rows
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggleRow = (id: string) => {
     setExpanded(prev => {
@@ -129,7 +123,6 @@ function PirPsdPage() {
     });
   };
 
-  // — Table
   const columns = useMemo<ColumnDef<PirRow>[]>(() => [
     {
       id: "expander",
@@ -162,7 +155,7 @@ function PirPsdPage() {
         return (
           <div className="flex items-center gap-2 w-32">
             <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: "var(--c-bg-2)" }}>
-              <div className="h-full" style={{ width: `${v}%`, background: "#6366f1" }} />
+              <div className="h-full" style={{ width: `${Math.min(v, 100)}%`, background: "#6366f1" }} />
             </div>
             <div className="text-[10px] font-mono tabular-nums w-8" style={{ color: "var(--c-text-2)" }}>{v}%</div>
           </div>
@@ -185,25 +178,13 @@ function PirPsdPage() {
     initialState: { pagination: { pageSize: 50 } },
   });
 
-  const breadcrumb = (
-    <div className="flex items-center gap-1.5 text-[11px] font-mono mb-3" style={{ color: "var(--c-text-3)" }}>
-      <button onClick={() => { setDrillRegion(null); setDrillDistrict(null); }}
-        className="hover:text-indigo-400 transition" style={{ color: drillRegion ? "var(--c-text-3)" : "#6366f1" }}>
-        проект
-      </button>
-      {drillRegion && (
-        <>
-          <ChevronRight size={10} />
-          <button onClick={() => setDrillDistrict(null)}
-            className="hover:text-indigo-400 transition"
-            style={{ color: drillDistrict ? "var(--c-text-3)" : "#6366f1" }}>
-            {drillRegion}
-          </button>
-        </>
-      )}
-      {drillDistrict && (<><ChevronRight size={10} /><span style={{ color: "#6366f1" }}>{drillDistrict}</span></>)}
-    </div>
-  );
+  const selectStyle = {
+    background: "var(--c-bg-1)",
+    border: "1px solid var(--c-border)",
+    color: "var(--c-text-1)",
+  } as React.CSSProperties;
+
+  const hasFilters = regionFilter || districtFilter || yearFilter || search || activeMoreCount > 0;
 
   return (
     <div>
@@ -215,110 +196,125 @@ function PirPsdPage() {
         onRefresh={pir.refresh}
       />
 
-      {breadcrumb}
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        <KpiCard label="Кол-во СНП" value={fmtNum(filtered.length)}
-          hint={drillRegion ? `в ${drillDistrict || drillRegion}` : `всего по проекту`} color="#10b981" />
-        <KpiCard label="Областей" value={uniq(filtered.map(r => r.region)).length}
-          hint={drillRegion ? "сбросить drill" : "регионов"} color="#06b6d4"
-          onClick={() => { setDrillRegion(null); setDrillDistrict(null); }} />
-        <KpiCard label="Районов" value={uniq(filtered.map(r => r.district)).length}
-          hint={drillDistrict ? "сбросить район" : "административных"} color="#f59e0b"
-          onClick={() => setDrillDistrict(null)} />
-        <KpiCard label="AVG готовность" value={`${avgReadiness(filtered)}%`}
-          hint={stageFilter === "all" ? "суммарная" : PIR_STAGE_LABELS[stageFilter as PirStage]}
-          color="#10b981" />
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        {(drillRegion || drillDistrict) && (
-          <button onClick={goBack}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium transition hover:brightness-110"
-            style={{ background: "var(--c-bg-1)", border: "1px solid var(--c-border)", color: "var(--c-text-2)" }}>
-            <ArrowLeft size={12} /> Назад
-          </button>
-        )}
-        <div className="relative">
-          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--c-text-4)" }} />
-          <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Поиск СНП / район"
-            className="rounded-md text-xs outline-none"
-            style={{
-              background: "var(--c-bg-1)", border: "1px solid var(--c-border)",
-              color: "var(--c-text-1)", padding: "6px 10px 6px 26px", minWidth: 220,
-            }} />
-        </div>
-        <select value={stageFilter} onChange={e => setStageFilter(e.target.value as any)}
-          className="rounded-md text-xs px-2.5 py-1.5 outline-none"
-          style={{ background: "var(--c-bg-1)", border: "1px solid var(--c-border)", color: "var(--c-text-1)" }}>
-          {STAGE_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
-        </select>
-        <select value={yearFilter} onChange={e => setYearFilter(e.target.value)}
-          className="rounded-md text-xs px-2.5 py-1.5 outline-none"
-          style={{ background: "var(--c-bg-1)", border: "1px solid var(--c-border)", color: "var(--c-text-1)" }}>
-          <option value="">Все годы</option>
-          {years.map(y => <option key={y} value={y}>{y}</option>)}
-        </select>
+      {/* Статичные KPI — всегда по всему проекту */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+        <KpiCard label="Кол-во СНП" value={fmtNum(rows.length)} hint="всего по проекту" color="#10b981" />
+        <KpiCard label="Областей" value={regionOptions.length} hint="регионов" color="#06b6d4" />
+        <KpiCard label="Районов"
+          value={uniq(rows.map(r => r.district)).filter(Boolean).length}
+          hint="административных" color="#f59e0b" />
+        <KpiCard label="AVG готовность" value={`${avgReadiness(rows)}%`} hint="суммарная" color="#8b5cf6" />
       </div>
 
       {rows.length === 0 ? (
         <EmptyState title="Нет данных" hint="Настройте Google Sheet или используйте локальные данные" />
       ) : (
         <>
-          {/* Bar chart: План vs Факт */}
-          <div className="grid grid-cols-3 gap-3 mb-6">
-            <div className="col-span-3 lg:col-span-2 rounded-lg p-4"
-              style={{ background: "var(--c-bg-1)", border: "1px solid var(--c-border)" }}>
-              <div className="flex items-center justify-between mb-3">
-                <div className="text-[11px] uppercase tracking-wider font-semibold" style={{ color: "var(--c-text-3)" }}>
-                  План vs Факт · {level === "project" ? "по областям" : level === "region" ? "по районам" : "по СНП"}
-                </div>
-                <div className="text-[10px] font-mono" style={{ color: "var(--c-text-4)" }}>
-                  {level !== "district" && "click → drill-down"}
-                </div>
+          {/* Фильтры */}
+          <div className="rounded-lg p-3 mb-4"
+            style={{ background: "var(--c-bg-1)", border: "1px solid var(--c-border)" }}>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="text-[10px] uppercase tracking-wider font-semibold mr-1" style={{ color: "var(--c-text-4)" }}>
+                Фильтры
               </div>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={barData} margin={{ top: 5, right: 0, left: -25, bottom: 50 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--c-border)" vertical={false} />
-                  <XAxis dataKey="name" angle={-35} textAnchor="end" interval={0}
-                    tick={{ fill: "var(--c-text-4)", fontSize: 9 }}
-                    axisLine={{ stroke: "var(--c-border)" }} tickLine={false} />
-                  <YAxis tick={{ fill: "var(--c-text-4)", fontSize: 9 }} axisLine={false} tickLine={false} domain={[0, 100]} />
-                  <Tooltip contentStyle={{ background: "var(--c-bg-2)", border: "1px solid var(--c-border)", borderRadius: 6, fontSize: 11 }} />
-                  <Legend wrapperStyle={{ fontSize: 10, color: "var(--c-text-3)" }} />
-                  <Bar dataKey="план" fill="var(--c-border)" radius={[2, 2, 0, 0]} maxBarSize={18} onClick={onBarClick} cursor="pointer" />
-                  <Bar dataKey="факт" fill="#6366f1" radius={[2, 2, 0, 0]} maxBarSize={18} onClick={onBarClick} cursor="pointer" />
-                </BarChart>
-              </ResponsiveContainer>
+
+              <select value={regionFilter} onChange={e => setRegionFilter(e.target.value)}
+                className="rounded-md text-xs px-2.5 py-1.5 outline-none min-w-[180px]" style={selectStyle}>
+                <option value="">Все области</option>
+                {regionOptions.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+
+              <select value={districtFilter} onChange={e => setDistrictFilter(e.target.value)}
+                disabled={districtOptions.length === 0}
+                className="rounded-md text-xs px-2.5 py-1.5 outline-none min-w-[180px] disabled:opacity-40"
+                style={selectStyle}>
+                <option value="">Все районы{regionFilter ? ` (${districtOptions.length})` : ""}</option>
+                {districtOptions.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+
+              <select value={yearFilter} onChange={e => setYearFilter(e.target.value)}
+                className="rounded-md text-xs px-2.5 py-1.5 outline-none" style={selectStyle}>
+                <option value="">Все годы</option>
+                {years.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+
+              <div className="relative">
+                <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--c-text-4)" }} />
+                <input value={search} onChange={e => setSearch(e.target.value)}
+                  placeholder="Поиск СНП / район / область"
+                  className="rounded-md text-xs outline-none"
+                  style={{
+                    background: "var(--c-bg-1)", border: "1px solid var(--c-border)",
+                    color: "var(--c-text-1)", padding: "6px 10px 6px 26px", minWidth: 240,
+                  }} />
+              </div>
+
+              <button onClick={() => setMoreOpen(o => !o)}
+                className="flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-md hover:brightness-110"
+                style={{
+                  background: moreOpen || activeMoreCount > 0 ? "color-mix(in srgb, #8b5cf6 15%, transparent)" : "var(--c-bg-2)",
+                  border: `1px solid ${moreOpen || activeMoreCount > 0 ? "#8b5cf6" : "var(--c-border)"}`,
+                  color: moreOpen || activeMoreCount > 0 ? "#8b5cf6" : "var(--c-text-2)",
+                }}>
+                <SlidersHorizontal size={11} />
+                Дополнительно
+                {activeMoreCount > 0 && (
+                  <span className="text-[9px] font-mono px-1 rounded" style={{ background: "#8b5cf6", color: "white" }}>
+                    {activeMoreCount}
+                  </span>
+                )}
+              </button>
+
+              {hasFilters && (
+                <button onClick={() => {
+                  setRegionFilter(""); setDistrictFilter(""); setYearFilter(""); setSearch("");
+                  setReadinessBucket("");
+                  setStageBuckets({ ird: "", izyskaniya: "", proektirovanie: "", soglasovaniya: "", zemleustroistvo: "", ekspertiza: "" });
+                }}
+                  className="text-[11px] px-2.5 py-1.5 rounded-md hover:brightness-110"
+                  style={{ background: "var(--c-bg-2)", border: "1px solid var(--c-border)", color: "var(--c-text-2)" }}>
+                  Сбросить
+                </button>
+              )}
+
+              <div className="ml-auto text-[10px] font-mono" style={{ color: "var(--c-text-3)" }}>
+                найдено: <span style={{ color: "var(--c-text-1)" }}>{fmtNum(filtered.length)}</span> из {fmtNum(rows.length)}
+                {filtered.length > 0 && (
+                  <> · средняя <span style={{ color: "#8b5cf6" }}>{avgReadiness(filtered)}%</span></>
+                )}
+              </div>
             </div>
 
-            {/* Line chart: тренд по этапам */}
-            <div className="col-span-3 lg:col-span-1 rounded-lg p-4"
-              style={{ background: "var(--c-bg-1)", border: "1px solid var(--c-border)" }}>
-              <div className="text-[11px] uppercase tracking-wider font-semibold mb-3" style={{ color: "var(--c-text-3)" }}>
-                Готовность по этапам
+            {moreOpen && (
+              <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--c-border)" }}>
+                <div className="text-[9px] uppercase tracking-wider font-semibold mb-2" style={{ color: "var(--c-text-4)" }}>
+                  Фильтр по диапазону готовности
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+                  <BucketSelect label="Суммарная готовность" value={readinessBucket} onChange={setReadinessBucket} options={BUCKETS} accent="#8b5cf6" />
+                  {STAGES.map((st, i) => (
+                    <BucketSelect key={st}
+                      label={PIR_STAGE_LABELS[st]}
+                      value={stageBuckets[st]}
+                      onChange={v => setStageBuckets(prev => ({ ...prev, [st]: v }))}
+                      options={BUCKETS}
+                      accent={["#10b981", "#06b6d4", "#6366f1", "#f59e0b", "#ec4899", "#8b5cf6"][i]} />
+                  ))}
+                </div>
               </div>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={lineData} margin={{ top: 5, right: 5, left: -25, bottom: 50 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--c-border)" />
-                  <XAxis dataKey="этап" angle={-35} textAnchor="end" interval={0}
-                    tick={{ fill: "var(--c-text-4)", fontSize: 9 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: "var(--c-text-4)", fontSize: 9 }} axisLine={false} tickLine={false} domain={[0, 100]} />
-                  <Tooltip contentStyle={{ background: "var(--c-bg-2)", border: "1px solid var(--c-border)", borderRadius: 6, fontSize: 11 }} />
-                  <Line type="monotone" dataKey="план" stroke="var(--c-text-4)" strokeDasharray="3 3" strokeWidth={1.5} dot={false} />
-                  <Line type="monotone" dataKey="факт" stroke="#10b981" strokeWidth={2} dot={{ r: 3, fill: "#10b981" }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+            )}
           </div>
 
-          {/* Stage progress detail */}
-          <div className="rounded-lg p-4 mb-6"
+          {/* Прогресс по этапам — отражает отфильтрованную выборку */}
+          <div className="rounded-lg p-4 mb-5"
             style={{ background: "var(--c-bg-1)", border: "1px solid var(--c-border)" }}>
-            <div className="text-[11px] uppercase tracking-wider font-semibold mb-3" style={{ color: "var(--c-text-3)" }}>
-              Прогресс по видам работ
+            <div className="flex items-baseline justify-between mb-3">
+              <div className="text-[11px] uppercase tracking-wider font-semibold" style={{ color: "var(--c-text-3)" }}>
+                Прогресс по видам работ
+              </div>
+              <div className="text-[10px]" style={{ color: "var(--c-text-4)" }}>
+                {hasFilters ? "по выбранной выборке" : "по всем СНП"}
+              </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
               {STAGES.map(stage => {
@@ -332,9 +328,9 @@ function PirPsdPage() {
                       {PIR_STAGE_LABELS[stage]}
                       {weight && <span className="text-[9px] ml-1" style={{ color: "var(--c-text-4)" }}>вес {(weight.weight * 100).toFixed(0)}%</span>}
                     </div>
-                    <div className="flex-1 h-1 rounded-full overflow-hidden relative" style={{ background: "var(--c-bg-2)" }}>
+                    <div className="flex-1 h-1.5 rounded-full overflow-hidden relative" style={{ background: "var(--c-bg-2)" }}>
                       <div className="h-full absolute inset-y-0 left-0" style={{ width: `${pctActive}%`, background: "color-mix(in srgb, #10b981 25%, transparent)" }} />
-                      <div className="h-full absolute inset-y-0 left-0" style={{ width: `${v}%`, background: "#10b981" }} />
+                      <div className="h-full absolute inset-y-0 left-0" style={{ width: `${Math.min(v, 100)}%`, background: "#10b981" }} />
                     </div>
                     <div className="font-mono tabular-nums w-10 text-right text-[10px]" style={{ color: "var(--c-text-1)" }}>
                       {v < 1 ? v.toFixed(1) : Math.round(v)}%
@@ -348,7 +344,7 @@ function PirPsdPage() {
             </div>
           </div>
 
-          {/* Table */}
+          {/* Таблица */}
           <div className="rounded-lg overflow-hidden"
             style={{ background: "var(--c-bg-1)", border: "1px solid var(--c-border)" }}>
             <div className="overflow-x-auto">
@@ -401,7 +397,7 @@ function PirPsdPage() {
             </div>
             <div className="flex items-center justify-between px-4 py-2.5 text-[11px] font-mono"
               style={{ borderTop: "1px solid var(--c-border)", color: "var(--c-text-3)" }}>
-              <span>стр. {table.getState().pagination.pageIndex + 1} / {table.getPageCount()} · {filtered.length} СНП</span>
+              <span>стр. {table.getState().pagination.pageIndex + 1} / {table.getPageCount() || 1} · {fmtNum(filtered.length)} СНП</span>
               <div className="flex gap-2">
                 <button onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}
                   className="px-2 py-0.5 rounded disabled:opacity-30"
@@ -415,6 +411,27 @@ function PirPsdPage() {
         </>
       )}
     </div>
+  );
+}
+
+function BucketSelect({ label, value, onChange, options, accent }: {
+  label: string; value: string; onChange: (v: string) => void;
+  options: { k: string; l: string }[]; accent: string;
+}) {
+  const active = value !== "";
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-[9px] uppercase tracking-wider truncate" style={{ color: "var(--c-text-4)" }}>{label}</span>
+      <select value={value} onChange={e => onChange(e.target.value)}
+        className="rounded-md text-[11px] px-2 py-1.5 outline-none"
+        style={{
+          background: "var(--c-bg-1)",
+          border: `1px solid ${active ? accent : "var(--c-border)"}`,
+          color: active ? accent : "var(--c-text-1)",
+        }}>
+        {options.map(o => <option key={o.k} value={o.k}>{o.l}</option>)}
+      </select>
+    </label>
   );
 }
 
@@ -446,7 +463,7 @@ function StageDetails({ row }: { row: PirRow }) {
                 </div>
               </div>
               <div className="h-0.5 rounded-full overflow-hidden mb-2" style={{ background: "var(--c-bg-2)" }}>
-                <div className="h-full" style={{ width: `${d.pct}%`, background: "#10b981" }} />
+                <div className="h-full" style={{ width: `${Math.min(d.pct, 100)}%`, background: "#10b981" }} />
               </div>
               <ul className="space-y-1">
                 {d.items.length === 0 && (
