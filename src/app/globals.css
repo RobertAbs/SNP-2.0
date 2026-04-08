@@ -1,0 +1,117 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+/* ─── Dark theme (default) ─────────────────────────────────────────── */
+:root,
+[data-theme="dark"] {
+  --c-bg-0:    #0C1520;
+  --c-bg-1:    #111C2E;
+  --c-bg-2:    #152032;
+  --c-border:  #1C3348;
+
+  --c-text-1:  #C8D6E5;
+  --c-text-2:  #7A90A8;
+  --c-text-3:  #4E6278;
+  --c-text-4:  #374F65;
+
+  --c-accent:     #0D8FC2;
+  --c-accent-sub: rgba(13, 143, 194, 0.12);
+
+  --c-ok:      #1A9E5A;
+  --c-ok-bg:   rgba(26, 158, 90, 0.15);
+  --c-ok-text: #5DCEA0;
+
+  --c-warn:      #B88A0C;
+  --c-warn-bg:   rgba(184, 138, 12, 0.15);
+  --c-warn-text: #E8C94B;
+
+  --c-info:      #0D8FC2;
+  --c-info-bg:   rgba(13, 143, 194, 0.12);
+  --c-info-text: #6DC8E8;
+
+  --c-plan:      #7B63C8;
+  --c-plan-bg:   rgba(123, 99, 200, 0.15);
+  --c-plan-text: #B4A5E8;
+
+  --c-neutral:      #4E6278;
+  --c-neutral-bg:   rgba(78, 98, 120, 0.2);
+  --c-neutral-text: #7A90A8;
+
+  --c-danger:      #C03535;
+  --c-danger-bg:   rgba(192, 53, 53, 0.15);
+  --c-danger-text: #F08888;
+
+  --c-r1: #0D8FC2;
+  --c-r2: #1A9E5A;
+  --c-r3: #7B63C8;
+  --c-r4: #B88A0C;
+  --c-r5: #C45514;
+}
+
+/* ─── Light theme ───────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --c-bg-0:    #EFF3F8;
+  --c-bg-1:    #FFFFFF;
+  --c-bg-2:    #FFFFFF;
+  --c-border:  #C8D5E3;
+
+  --c-text-1:  #18304A;
+  --c-text-2:  #3D5570;
+  --c-text-3:  #627A94;
+  --c-text-4:  #8FA2B8;
+
+  --c-accent:     #0072A3;
+  --c-accent-sub: rgba(0, 114, 163, 0.10);
+
+  --c-ok:      #0E7A3E;
+  --c-ok-bg:   rgba(14, 122, 62, 0.10);
+  --c-ok-text: #0E7A3E;
+
+  --c-warn:      #8A6308;
+  --c-warn-bg:   rgba(138, 99, 8, 0.10);
+  --c-warn-text: #8A6308;
+
+  --c-info:      #0072A3;
+  --c-info-bg:   rgba(0, 114, 163, 0.10);
+  --c-info-text: #0072A3;
+
+  --c-plan:      #5B45A8;
+  --c-plan-bg:   rgba(91, 69, 168, 0.10);
+  --c-plan-text: #5B45A8;
+
+  --c-neutral:      #627A94;
+  --c-neutral-bg:   rgba(98, 122, 148, 0.12);
+  --c-neutral-text: #627A94;
+
+  --c-danger:      #B02020;
+  --c-danger-bg:   rgba(176, 32, 32, 0.10);
+  --c-danger-text: #B02020;
+
+  --c-r1: #0072A3;
+  --c-r2: #0E7A3E;
+  --c-r3: #5B45A8;
+  --c-r4: #8A6308;
+  --c-r5: #963A0A;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--c-bg-0);
+  color: var(--c-text-1);
+  font-family: 'Inter', system-ui, sans-serif;
+  height: 100%;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--c-bg-1); }
+::-webkit-scrollbar-thumb { background: var(--c-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--c-accent); }
+
+option { background: var(--c-bg-2); color: var(--c-text-1); }
