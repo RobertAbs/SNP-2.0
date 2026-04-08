@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import {
   useReactTable, getCoreRowModel, getFilteredRowModel, getSortedRowModel,
   getPaginationRowModel, flexRender, ColumnDef, SortingState,
@@ -25,7 +26,11 @@ const STAGE_OPTIONS = [{ key: "all" as const, label: "Все этапы" }, ...S
 // Drill-down уровни: project → region → district → snp
 type DrillLevel = "project" | "region" | "district";
 
-export default function PirPsdPage() {
+export default function PirPsdPageWrapper() {
+  return <Suspense fallback={null}><PirPsdPage /></Suspense>;
+}
+
+function PirPsdPage() {
   const pir = usePirPsd();
   const weights = usePirWeights();
   const sp = useSearchParams();
