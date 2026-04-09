@@ -1,17 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard, FileText, Building2, HardHat,
+  LayoutDashboard, FileText, Building2, HardHat, Satellite,
   Sun, Moon, LogOut, UserCircle,
 } from "lucide-react";
 import { useTheme } from "./ThemeProvider";
 
 const navItems = [
   { href: "/",         label: "Главная",             icon: LayoutDashboard },
+  { href: "/svod",     label: "Общий свод",          icon: Satellite },
   { href: "/pir-psd",  label: "ПИР-ПСД",             icon: FileText },
   { href: "/smr",      label: "СМР (ВОЛС)",          icon: HardHat },
   { href: "/gu",       label: "ТП/ПП",  icon: Building2 },
@@ -41,19 +41,12 @@ export default function Sidebar() {
       className="fixed left-0 top-0 h-full w-60 flex flex-col z-50 transition-colors duration-200"
       style={{ background: "var(--c-bg-1)", borderRight: "1px solid var(--c-border)" }}
     >
-      <div className="px-4 py-4 border-b flex items-center gap-3" style={{ borderColor: "var(--c-border)" }}>
-        <Image
-          src={theme === "dark" ? "/logo-dark.svg" : "/logo-light.svg"}
-          alt="Транстелеком"
-          width={44}
-          height={15}
-          priority
-          style={{ height: "auto", width: "44px" }}
-        />
-        <div className="border-l pl-3" style={{ borderColor: "var(--c-border)" }}>
-          <div className="text-sm font-bold leading-tight" style={{ color: "var(--c-text-1)" }}>
-            Мониторинг<br />проекта
-          </div>
+      <div className="px-5 py-5 border-b" style={{ borderColor: "var(--c-border)" }}>
+        <div className="text-base font-bold leading-tight" style={{ color: "var(--c-text-1)" }}>
+          СНП 2.0
+        </div>
+        <div className="text-[11px] mt-0.5" style={{ color: "var(--c-text-3)" }}>
+          Мониторинг проекта
         </div>
       </div>
 
@@ -125,15 +118,6 @@ export default function Sidebar() {
         </div>
       )}
 
-      <div
-        className="px-6 py-3 border-t"
-        style={{ borderColor: "var(--c-border)" }}
-      >
-        <div className="text-xs font-medium" style={{ color: "var(--c-text-3)" }}>АО «Транстелеком»</div>
-        <div className="text-[10px] mt-0.5 tracking-wide" style={{ color: "var(--c-text-4)" }}>
-          TTC Intelligent Solutions
-        </div>
-      </div>
     </aside>
   );
 }

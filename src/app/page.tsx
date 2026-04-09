@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { Home, MapPin, Building2, Radio, FileText, HardHat, ShieldCheck } from "lucide-react";
+import { Home, MapPin, Building2, Radio, FileText, HardHat, ShieldCheck, CheckCircle2, Zap, Satellite } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import PageHeader from "@/components/common/PageHeader";
 import KpiCard from "@/components/common/KpiCard";
@@ -11,8 +11,9 @@ import { usePirPsd } from "@/hooks/usePirPsd";
 import { useSmr } from "@/hooks/useSmr";
 import { useGU } from "@/hooks/useGU";
 import { useVols } from "@/hooks/useVols";
+import { useSvod } from "@/hooks/useSvod";
 import { fmtNum, uniq, computeGuKpi } from "@/lib/dataHelpers";
-import { PirRow, SmrRow } from "@/lib/types";
+import { PirRow, SmrRow, SvodRow } from "@/lib/types";
 
 const PIE_COLORS = [
   "#10b981", "#06b6d4", "#f59e0b", "#8b5cf6", "#ec4899", "#6366f1",
@@ -38,21 +39,49 @@ export default function HomePage() {
   const smr = useSmr();
   const gu  = useGU();
   const vols = useVols();
+  const svod = useSvod();
 
   const pirRows: PirRow[] = pir.data ?? [];
   const smrRows: SmrRow[] = smr.data ?? [];
   const guRows = gu.data ?? [];
   const volsData = vols.data ?? { rows: [], totals: { total: 0, year2026: 0, year2027: 0 } };
+  const svodRows: SvodRow[] = svod.data ?? [];
 
-  // ─── Общие счётчики ────────────────────────────────────
-  const totalSnp = pirRows.length;
+  // ─── Агрегаты по общему своду ─────────────────────────
+  const svodStats = useMemo(() => {
+    const s = {
+      total: svodRows.length,
+      vols: 0,
+      volsWifi: 0,
+      sputnik: 0,
+      connectedSnp: 0,
+      connectedObjects: 0,
+      byYear: { 2025: 0, 2026: 0, 2027: 0 } as Record<number, number>,
+      connectedByYear: { 2025: 0, 2026: 0, 2027: 0 } as Record<number, number>,
+    };
+    for (const r of svodRows) {
+      if (r.tech === "vols") s.vols++;
+      else if (r.tech === "vols_wifi_public") s.volsWifi++;
+      else if (r.tech === "sputnik") s.sputnik++;
+      if (r.status === "connected") s.connectedSnp++;
+      s.connectedObjects += r.objectsConnectedFact;
+      if (r.year && s.byYear[r.year] !== undefined) s.byYear[r.year]++;
+      if (r.year && r.status === "connected" && s.connectedByYear[r.year] !== undefined) {
+        s.connectedByYear[r.year]++;
+      }
+    }
+    return s;
+  }, [svodRows]);
+
+  // Количество СНП = ВОЛС + Спутник (все технологии — "ВОЛС (Wi-Fi public)" тоже считается ВОЛС)
+  const totalSnp = svodStats.total > 0 ? svodStats.total : pirRows.length;
   const regionsCount = useMemo(
-    () => uniq(pirRows.map(r => r.region)).filter(Boolean).length,
-    [pirRows]
+    () => uniq((svodRows.length ? svodRows : pirRows).map(r => r.region)).filter(Boolean).length,
+    [svodRows, pirRows]
   );
   const districtsCount = useMemo(
-    () => uniq(pirRows.map(r => r.district)).filter(Boolean).length,
-    [pirRows]
+    () => uniq((svodRows.length ? svodRows : pirRows).map(r => r.district)).filter(Boolean).length,
+    [svodRows, pirRows]
   );
 
   const totalVolsKm = volsData.totals.total;
@@ -135,10 +164,10 @@ export default function HomePage() {
   }, [pirRows]);
 
   // ─── Refresh ───────────────────────────────────────────
-  const lastUpdated = pir.lastUpdated || smr.lastUpdated || gu.lastUpdated || vols.lastUpdated;
-  const refreshing = pir.refreshing || smr.refreshing || gu.refreshing || vols.refreshing;
+  const lastUpdated = svod.lastUpdated || pir.lastUpdated || smr.lastUpdated || gu.lastUpdated || vols.lastUpdated;
+  const refreshing = svod.refreshing || pir.refreshing || smr.refreshing || gu.refreshing || vols.refreshing;
   const onRefresh = async () => {
-    await Promise.all([pir.refresh(), smr.refresh(), gu.refresh(), vols.refresh()]);
+    await Promise.all([pir.refresh(), smr.refresh(), gu.refresh(), vols.refresh(), svod.refresh()]);
   };
 
   return (
@@ -151,12 +180,16 @@ export default function HomePage() {
         onRefresh={onRefresh}
       />
 
-      {/* Первый ряд — объёмные показатели */}
+      {/* Первый ряд — объёмные показатели (свод ВОЛС + Спутник) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
         <KpiCard
           label="Количество СНП"
           value={fmtNum(totalSnp)}
-          hint="всего населённых пунктов"
+          hint={
+            svodStats.total > 0
+              ? `ВОЛС ${fmtNum(svodStats.vols)} · Wi-Fi public ${fmtNum(svodStats.volsWifi)} · Спутник ${fmtNum(svodStats.sputnik)}`
+              : "всего населённых пунктов"
+          }
           icon={Home}
           color="#10b981"
           href="/pir-psd"
@@ -184,6 +217,45 @@ export default function HomePage() {
           icon={Building2}
           color="#8b5cf6"
           href="/pir-psd"
+        />
+      </div>
+
+      {/* Подключено — сёла и объекты, в разрезе по годам */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-3">
+        <KpiCard
+          label="Подключено сёл"
+          value={fmtNum(svodStats.connectedSnp)}
+          hint={`${svodStats.total ? ((svodStats.connectedSnp / svodStats.total) * 100).toFixed(1) : "0"}% от плана`}
+          icon={CheckCircle2}
+          color="#22c55e"
+        />
+        <KpiCard
+          label="Подключено объектов"
+          value={fmtNum(svodStats.connectedObjects)}
+          hint="факт по госучреждениям / бюджетным"
+          icon={ShieldCheck}
+          color="#10b981"
+        />
+        <KpiCard
+          label="СНП 2025"
+          value={fmtNum(svodStats.byYear[2025] ?? 0)}
+          hint={`подключено: ${fmtNum(svodStats.connectedByYear[2025] ?? 0)}`}
+          icon={Zap}
+          color="#f59e0b"
+        />
+        <KpiCard
+          label="СНП 2026"
+          value={fmtNum(svodStats.byYear[2026] ?? 0)}
+          hint={`подключено: ${fmtNum(svodStats.connectedByYear[2026] ?? 0)}`}
+          icon={Zap}
+          color="#06b6d4"
+        />
+        <KpiCard
+          label="СНП 2027"
+          value={fmtNum(svodStats.byYear[2027] ?? 0)}
+          hint={`подключено: ${fmtNum(svodStats.connectedByYear[2027] ?? 0)}`}
+          icon={Satellite}
+          color="#8b5cf6"
         />
       </div>
 

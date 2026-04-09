@@ -4,8 +4,8 @@ import AppShell from "@/components/layout/AppShell";
 import { ThemeProvider, ThemeScript } from "@/components/layout/ThemeProvider";
 
 export const metadata: Metadata = {
-  title: "СНП 2.0 — Мониторинг проекта | TTC",
-  description: "Дашборд мониторинга проекта подключения СНП и ГУ к интернету",
+  title: "СНП 2.0 — Мониторинг проекта",
+  description: "Дашборд мониторинга проекта подключения СНП к интернету",
 };
 
 export default function RootLayout({

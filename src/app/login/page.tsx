@@ -2,7 +2,6 @@
 
 import { useState, useRef, FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { Lock, User, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { useTheme } from "@/components/layout/ThemeProvider";
 
@@ -70,16 +69,14 @@ export default function LoginPage() {
       />
 
       <div className="relative w-full max-w-[420px]">
-        {/* шапка — только лого */}
-        <div className="flex justify-center mb-8">
-          <Image
-            src={theme === "dark" ? "/logo-dark.svg" : "/logo-light.svg"}
-            alt="Транстелеком"
-            width={88}
-            height={30}
-            priority
-            style={{ height: "auto", width: "88px" }}
-          />
+        {/* шапка — название проекта */}
+        <div className="flex flex-col items-center mb-8">
+          <div className="text-2xl font-bold tracking-tight" style={{ color: "var(--c-text-1)" }}>
+            СНП 2.0
+          </div>
+          <div className="text-xs mt-1" style={{ color: "var(--c-text-3)" }}>
+            Мониторинг проекта
+          </div>
         </div>
 
         {/* карточка */}
@@ -219,7 +216,7 @@ export default function LoginPage() {
           className="text-center text-[10px] mt-6 font-mono"
           style={{ color: "var(--c-text-4)" }}
         >
-          АО «Транстелеком» · TTC Intelligent Solutions · 2026
+          СНП 2.0 · 2026
         </div>
       </div>
     </div>

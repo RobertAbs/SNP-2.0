@@ -73,6 +73,72 @@ export interface GUCheckpoint {
   sectionDeadline: string | null; // ISO если в секции был указан срок
 }
 
+// ─── Общий свод (по СНП + объектам) ─────────────────────────────────
+export type SvodTech = "vols" | "vols_wifi_public" | "sputnik";
+export type SvodStatus = "connected" | "in_progress";
+
+export const SVOD_TECH_LABELS: Record<SvodTech, string> = {
+  vols: "ВОЛС",
+  vols_wifi_public: "ВОЛС (Wi-Fi public)",
+  sputnik: "Спутник",
+};
+
+export const SVOD_STATUS_LABELS: Record<SvodStatus, string> = {
+  connected: "Подключено",
+  in_progress: "В работе",
+};
+
+/** Ключи объектов, которые могут быть подключены в СНП */
+export const SVOD_OBJECT_KEYS = [
+  "akimat", "school", "hospital", "police", "mchs", "military",
+  "border", "vet", "library", "club", "publicPoint", "cson",
+] as const;
+export type SvodObjectKey = typeof SVOD_OBJECT_KEYS[number];
+
+export const SVOD_OBJECT_LABELS: Record<SvodObjectKey, string> = {
+  akimat: "Акимат",
+  school: "Школа",
+  hospital: "Больница / ФАП",
+  police: "Полиция",
+  mchs: "МЧС",
+  military: "Военкомат",
+  border: "Погран. служба",
+  vet: "Ветеринария",
+  library: "Библиотека",
+  club: "Сельский клуб/ДК",
+  publicPoint: "Общ. точка доступа",
+  cson: "ЦОН",
+};
+
+export interface SvodRow {
+  id: number;
+  kato: string;
+  newKtLength: number;       // Новая протяженность КТ
+  tech: SvodTech;
+  techRaw: string;
+  region: string;
+  district: string;
+  ruralDistrict: string;
+  snp: string;
+  coords: string;
+  population: number;
+  year: number | null;
+  households: number;
+  objects: Record<SvodObjectKey, number>; // 1 = есть / 0 = нет
+  objectsConnectedFact: number;
+  status: SvodStatus;
+  statusRaw: string;
+  extraStatus: string;
+  whatConnected: string;     // "Что подключено" — текст
+  pointsCount: number;
+  totalGuBo: number;
+  smrStart: string;          // "DD.MM.YYYY"
+  smrEnd: string;            // "DD.MM.YYYY"
+  volsLengthKm: number;      // Ориентировочная протяжённость ВОЛС
+  trenchKm: number;          // Откопка/закопка траншей
+  microTubeKm: number;       // Прокладка микротрубки
+}
+
 // ─── ВОЛС ───────────────────────────────────────────────────────────
 export interface VolsRow {
   id: number;

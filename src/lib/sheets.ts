@@ -10,7 +10,7 @@ import path from "path";
 
 const SHEET_ID = process.env.SHEET_ID || "";
 
-export type SheetSlug = "GU" | "PIR_PSD" | "PIR_WEIGHTS" | "VOLS" | "SMR" | "ITD";
+export type SheetSlug = "GU" | "PIR_PSD" | "PIR_WEIGHTS" | "VOLS" | "SMR" | "ITD" | "SVOD";
 
 export const GIDS: Record<SheetSlug, string> = {
   GU:          process.env.GID_GU          || "0",
@@ -19,6 +19,7 @@ export const GIDS: Record<SheetSlug, string> = {
   VOLS:        process.env.GID_VOLS        || "0",
   SMR:         process.env.GID_SMR         || "0",
   ITD:         process.env.GID_ITD         || "0",
+  SVOD:        process.env.GID_SVOD        || "556254593",
 };
 
 const LOCAL_FILE: Record<SheetSlug, string> = {
@@ -28,6 +29,7 @@ const LOCAL_FILE: Record<SheetSlug, string> = {
   VOLS: "vols.csv",
   SMR: "smr.csv",
   ITD: "itd.csv",
+  SVOD: "svod.csv",
 };
 
 export function buildCsvUrl(gid: string): string {
