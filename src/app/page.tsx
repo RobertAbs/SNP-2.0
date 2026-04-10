@@ -212,37 +212,46 @@ export default function HomePage() {
       {/* Ряд 2 — Подключено СНП / Разбивка / Объекты */}
       <div className="grid grid-cols-3 gap-3 mb-3">
         <KpiCard
-          label="Из них подключено"
+          label="Подключено"
           value={`${fmtNum(svodStats.connectedSnp)} СНП`}
           hint={`${svodStats.total ? ((svodStats.connectedSnp / svodStats.total) * 100).toFixed(1) : "0"}% от плана`}
           icon={CheckCircle2}
           color="#22c55e"
           href="/svod?status=connected"
         />
-        {/* Кастомная карточка: разбивка подключённых */}
+        {/* Технология подключения */}
         <div
-          className="rounded-lg p-4 flex flex-col items-center justify-center text-center"
+          className="rounded-lg p-4 flex flex-col"
           style={{ background: "var(--c-bg-1)", border: "1px solid var(--c-border)" }}
         >
-          <div className="text-[11px] uppercase tracking-wider font-semibold mb-2" style={{ color: "var(--c-text-3)" }}>
-            Разбивка подключённых
+          <div className="text-[11px] uppercase tracking-wider font-semibold mb-3 text-center" style={{ color: "var(--c-text-3)" }}>
+            Технология подключения
           </div>
-          <div className="space-y-1">
-            <div className="flex items-center justify-center gap-2">
-              <span className="w-2 h-2 rounded-full" style={{ background: "#06b6d4" }} />
-              <span className="text-sm font-bold" style={{ color: "var(--c-text-1)" }}>{fmtNum(svodStats.connectedVols)}</span>
-              <span className="text-xs" style={{ color: "var(--c-text-3)" }}>ВОЛС</span>
-            </div>
-            <div className="flex items-center justify-center gap-2">
-              <span className="w-2 h-2 rounded-full" style={{ background: "#f59e0b" }} />
-              <span className="text-sm font-bold" style={{ color: "var(--c-text-1)" }}>{fmtNum(svodStats.tempSputnik)}</span>
-              <span className="text-xs" style={{ color: "var(--c-text-3)" }}>временно спутник</span>
-            </div>
-            <div className="flex items-center justify-center gap-2">
-              <span className="w-2 h-2 rounded-full" style={{ background: "#8b5cf6" }} />
-              <span className="text-sm font-bold" style={{ color: "var(--c-text-1)" }}>{fmtNum(svodStats.connectedSputnik)}</span>
-              <span className="text-xs" style={{ color: "var(--c-text-3)" }}>спутник</span>
-            </div>
+          <div className="flex-1 flex flex-col justify-center gap-2.5">
+            {[
+              { label: "ВОЛС", value: svodStats.connectedVols, color: "#06b6d4", total: svodStats.connectedSnp },
+              { label: "Временно спутник", value: svodStats.tempSputnik, color: "#f59e0b", total: svodStats.connectedSnp },
+              { label: "Спутник", value: svodStats.connectedSputnik, color: "#8b5cf6", total: svodStats.connectedSnp },
+            ].map((item) => (
+              <div key={item.label}>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: item.color }} />
+                    <span className="text-xs font-medium" style={{ color: "var(--c-text-2)" }}>{item.label}</span>
+                  </div>
+                  <span className="text-sm font-bold tabular-nums" style={{ color: "var(--c-text-1)" }}>{fmtNum(item.value)}</span>
+                </div>
+                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--c-bg-2)" }}>
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{
+                      background: item.color,
+                      width: `${item.total ? (item.value / item.total) * 100 : 0}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
           </div>
         </div>
         <KpiCard
