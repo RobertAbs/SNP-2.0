@@ -13,7 +13,7 @@ import { useGU } from "@/hooks/useGU";
 import { useVols } from "@/hooks/useVols";
 import { useSvod } from "@/hooks/useSvod";
 import { fmtNum, computeGuKpi } from "@/lib/dataHelpers";
-import { PirRow, SmrRow, SvodRow } from "@/lib/types";
+import { PirRow, SvodRow } from "@/lib/types";
 
 const PIE_COLORS = [
   "#10b981", "#06b6d4", "#f59e0b", "#8b5cf6", "#ec4899", "#6366f1",
@@ -42,7 +42,6 @@ export default function HomePage() {
   const svod = useSvod();
 
   const pirRows: PirRow[] = pir.data ?? [];
-  const smrRows: SmrRow[] = smr.data ?? [];
   const guRows = gu.data ?? [];
   const volsData = vols.data ?? { rows: [], totals: { total: 0, year2026: 0, year2027: 0 } };
   const svodRows: SvodRow[] = svod.data ?? [];
@@ -94,11 +93,22 @@ export default function HomePage() {
     return Math.round((s / pirRows.length) * 10) / 10;
   }, [pirRows]);
 
-  const smrDonePct = useMemo(() => {
-    if (smrRows.length === 0) return 0;
-    const s = smrRows.reduce((a, b) => a + b.smrPercent, 0);
-    return Math.round((s / smrRows.length) * 10) / 10;
-  }, [smrRows]);
+  // СМР ВОЛС: % выполнения из свода
+  const volsSmrStats = useMemo(() => {
+    let count = 0, totalKm = 0, connSnp = 0, builtKm = 0;
+    for (const r of svodRows) {
+      if (r.tech === "sputnik") continue;
+      count++;
+      totalKm += r.newKtLength;
+      const isConn = r.status === "connected";
+      const isTemp = r.extraStatus.toLowerCase().includes("временно спутник");
+      if (isConn && !isTemp) { connSnp++; builtKm += r.newKtLength; }
+    }
+    return {
+      pctByKm: totalKm ? (builtKm / totalKm) * 100 : 0,
+      pctBySnp: count ? (connSnp / count) * 100 : 0,
+    };
+  }, [svodRows]);
 
   const guKpi = useMemo(() => computeGuKpi(guRows), [guRows]);
   const guDonePct = guKpi.total
@@ -239,9 +249,6 @@ export default function HomePage() {
               </div>
             ))}
           </div>
-          <div className="text-[10px] mt-2" style={{ color: "var(--c-text-4)" }}>
-            всего {fmtNum(svodStats.connectedSnp)} подключённых
-          </div>
         </div>
         <KpiCard
           label="Подключено объектов (ГУ/БО)"
@@ -265,8 +272,8 @@ export default function HomePage() {
         />
         <KpiCard
           label="Выполнено СМР (ВОЛС)"
-          value={`${smrDonePct}%`}
-          hint={smrRows.length === 0 ? "лист СМР пока не заполнен" : `${fmtNum(smrRows.length)} СНП в производстве`}
+          value={`${volsSmrStats.pctByKm.toFixed(2).replace(".", ",")}%`}
+          hint={`${volsSmrStats.pctByKm.toFixed(2).replace(".", ",")}% по км · ${volsSmrStats.pctBySnp.toFixed(2).replace(".", ",")}% по СНП`}
           icon={HardHat}
           color="#ec4899"
           href="/smr"

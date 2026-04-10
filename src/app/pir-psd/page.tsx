@@ -227,7 +227,7 @@ function PirPsdPage() {
       </div>
 
       {rows.length === 0 ? (
-        <EmptyState title="Нет данных" hint="Настройте Google Sheet или используйте локальные данные" />
+        <EmptyState title="Нет данных" hint="Данные загружаются, обновите страницу" />
       ) : (
         <>
           {/* Фильтры */}

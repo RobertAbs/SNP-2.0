@@ -81,7 +81,7 @@ export default function GUPage() {
       </div>
 
       {rows.length === 0 ? (
-        <EmptyState title="Нет данных" hint="Настройте лист 'ГУ Пункты пропуска'" />
+        <EmptyState title="Нет данных" hint="Данные загружаются, обновите страницу" />
       ) : (
         <>
           {/* Status segment bar + операционные метрики */}
