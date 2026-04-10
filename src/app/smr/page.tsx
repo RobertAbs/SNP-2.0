@@ -1,63 +1,164 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { HardHat, Search, Check, X } from "lucide-react";
+import { HardHat, Search, Check, X, Cable, Waypoints, CheckCircle2, Building2, BarChart3 } from "lucide-react";
 import PageHeader from "@/components/common/PageHeader";
 import EmptyState from "@/components/common/EmptyState";
 import KpiCard from "@/components/common/KpiCard";
 import { useSmr } from "@/hooks/useSmr";
+import { useSvod } from "@/hooks/useSvod";
 import { fmtNum, fmtDate, groupBy } from "@/lib/dataHelpers";
-import { SmrRow } from "@/lib/types";
+import { SmrRow, SvodRow } from "@/lib/types";
 
 export default function SmrPage() {
   const smr = useSmr();
+  const svod = useSvod();
   const [search, setSearch] = useState("");
-  const rows = smr.data ?? [];
+  const smrRows = smr.data ?? [];
+  const svodRows: SvodRow[] = svod.data ?? [];
 
-  const filtered = useMemo(() => rows.filter(r => {
+  // ─── Агрегаты из свода: только ВОЛС (не спутник) ────────
+  const volsStats = useMemo(() => {
+    const s = {
+      count: 0,
+      totalLengthKm: 0,
+      connectedSnp: 0,
+      builtKm: 0,
+      connectedObjects: 0,
+    };
+    for (const r of svodRows) {
+      if (r.tech === "sputnik") continue; // только ВОЛС + Wi-Fi public
+      s.count++;
+      s.totalLengthKm += r.newKtLength;
+
+      const isConn = r.status === "connected";
+      const isTemp = r.extraStatus.toLowerCase().includes("временно спутник");
+
+      if (isConn && !isTemp) {
+        s.connectedSnp++;
+        s.builtKm += r.newKtLength;
+        s.connectedObjects += r.objectsConnectedFact;
+      }
+    }
+    return s;
+  }, [svodRows]);
+
+  const pctByKm = volsStats.totalLengthKm
+    ? ((volsStats.builtKm / volsStats.totalLengthKm) * 100)
+    : 0;
+  const pctBySnp = volsStats.count
+    ? ((volsStats.connectedSnp / volsStats.count) * 100)
+    : 0;
+
+  // ─── Существующие SMR-агрегаты ──────────────────────────
+  const filtered = useMemo(() => smrRows.filter(r => {
     if (!search) return true;
     const s = search.toLowerCase();
     return r.snp.toLowerCase().includes(s) || r.region.toLowerCase().includes(s) || r.district.toLowerCase().includes(s);
-  }), [rows, search]);
-
-  const avgSmr = rows.length ? Math.round((rows.reduce((s, r) => s + r.smrPercent, 0) / rows.length) * 10) / 10 : 0;
-  const avgFact = rows.length ? Math.round((rows.reduce((s, r) => s + r.factPercent, 0) / rows.length) * 10) / 10 : 0;
-  const completed = rows.filter(r => r.smrPercent >= 100).length;
-  const avgExec = rows.length ? Math.round((rows.reduce((s, r) => s + r.execDocsPercent, 0) / rows.length) * 10) / 10 : 0;
+  }), [smrRows, search]);
 
   const byRegion = useMemo(() => {
-    const g = groupBy(rows, r => r.region || "—");
+    const g = groupBy(smrRows, r => r.region || "—");
     return Object.entries(g).map(([region, items]) => ({
       region,
       count: items.length,
       avgSmr: items.reduce((a, b) => a + b.smrPercent, 0) / items.length,
-      avgFact: items.reduce((a, b) => a + b.factPercent, 0) / items.length,
     })).sort((a, b) => b.avgSmr - a.avgSmr);
-  }, [rows]);
+  }, [smrRows]);
+
+  const lastUpdated = svod.lastUpdated || smr.lastUpdated;
+  const refreshing = svod.refreshing || smr.refreshing;
+  const onRefresh = async () => {
+    await Promise.all([smr.refresh(), svod.refresh()]);
+  };
 
   return (
     <div>
       <PageHeader
-        title="СМР · ВОЛС"
+        title="Мониторинг проекта СНП · СМР · ВОЛС"
         subtitle="Строительно-монтажные работы по ВОЛС"
-        lastUpdated={smr.lastUpdated}
-        refreshing={smr.refreshing}
-        onRefresh={smr.refresh}
+        lastUpdated={lastUpdated}
+        refreshing={refreshing}
+        onRefresh={onRefresh}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-        <KpiCard label="СНП в СМР" value={fmtNum(rows.length)} hint="в производстве работ" icon={HardHat} color="#f59e0b" />
-        <KpiCard label="Средний % СМР" value={`${avgSmr}%`} hint="по всем активным" color="#10b981" />
-        <KpiCard label="Фактическая готовность" value={`${avgFact}%`} hint="средняя по проекту" color="#06b6d4" />
-        <KpiCard label="Исп.-рабочая документация" value={`${avgExec}%`} hint="среднее предоставления" color="#8b5cf6" />
+      {/* ═══ Ряд 1: Количество СНП / Протяжённость / Выполнено ═══ */}
+      <div className="grid grid-cols-3 gap-3 mb-3">
+        <KpiCard
+          label="Количество СНП"
+          value={fmtNum(volsStats.count)}
+          hint="ВОЛС + ВОЛС (Wi-Fi public)"
+          icon={Waypoints}
+          color="#06b6d4"
+        />
+        <KpiCard
+          label="Общая протяжённость ВОЛС"
+          value={`${fmtNum(Math.round(volsStats.totalLengthKm))} км`}
+          hint="ориентировочная по проекту"
+          icon={Cable}
+          color="#f59e0b"
+        />
+        {/* Выполнено — кастомная карточка с двумя показателями */}
+        <div
+          className="rounded-lg p-4 flex flex-col items-center justify-center text-center"
+          style={{ background: "var(--c-bg-1)", border: "1px solid var(--c-border)" }}
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <BarChart3 size={13} style={{ color: "#10b981" }} />
+            <span className="text-[11px] uppercase tracking-wider font-semibold" style={{ color: "var(--c-text-3)" }}>
+              Выполнено
+            </span>
+          </div>
+          <div className="flex items-center justify-center gap-6">
+            <div className="flex flex-col items-center">
+              <span className="text-2xl font-extrabold tabular-nums" style={{ color: "#10b981" }}>
+                {pctByKm.toFixed(2).replace(".", ",")}%
+              </span>
+              <span className="text-[10px] font-medium" style={{ color: "var(--c-text-3)" }}>по км</span>
+            </div>
+            <div className="w-px h-8" style={{ background: "var(--c-border)" }} />
+            <div className="flex flex-col items-center">
+              <span className="text-2xl font-extrabold tabular-nums" style={{ color: "#10b981" }}>
+                {pctBySnp.toFixed(2).replace(".", ",")}%
+              </span>
+              <span className="text-[10px] font-medium" style={{ color: "var(--c-text-3)" }}>по СНП</span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {rows.length === 0 ? (
+      {/* ═══ Ряд 2: Подключено СНП / Построено ВОЛС / Объекты ═══ */}
+      <div className="grid grid-cols-3 gap-3 mb-5">
+        <KpiCard
+          label="Подключено СНП"
+          value={fmtNum(volsStats.connectedSnp)}
+          hint={`${pctBySnp.toFixed(2).replace(".", ",")}% от плана`}
+          icon={CheckCircle2}
+          color="#22c55e"
+        />
+        <KpiCard
+          label="Всего построено ВОЛС"
+          value={`${volsStats.builtKm.toLocaleString("ru-RU", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} км`}
+          hint={`${pctByKm.toFixed(2).replace(".", ",")}% от ${fmtNum(Math.round(volsStats.totalLengthKm))} км`}
+          icon={HardHat}
+          color="#f59e0b"
+        />
+        <KpiCard
+          label="Подключено объектов (ГУ/БО)"
+          value={fmtNum(volsStats.connectedObjects)}
+          hint="факт по госучреждениям / бюджетным"
+          icon={Building2}
+          color="#8b5cf6"
+        />
+      </div>
+
+      {/* ═══ Детализация из листа СМР ═══ */}
+      {smrRows.length === 0 ? (
         <div className="rounded-lg p-12"
           style={{ background: "var(--c-bg-1)", border: "1px solid var(--c-border)" }}>
           <EmptyState
-            title="Лист СМР пока пуст"
-            hint="Структура парсера готова под 30+ колонок: ГПР, мобилизация, даты начала/завершения СМР, исполнительная документация, ГАСК, декларация, акт ввода, КС-3, 2В, объёмная справка, сертификаты CT-KZ, корректировки ЗУП/ПСД, технический акт приёмки, заключение комиссии. Данные появятся автоматически после наполнения листа."
+            title="Детализация СМР пока не заполнена"
+            hint="Данные появятся автоматически после наполнения листа СМР в Google Sheets."
           />
         </div>
       ) : (
@@ -91,7 +192,7 @@ export default function SmrPage() {
             </div>
           </div>
 
-          {/* Фильтр и таблица с расширенными данными */}
+          {/* Фильтр и таблица */}
           <div className="flex items-center gap-2 mb-3">
             <div className="relative">
               <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--c-text-4)" }} />
@@ -104,7 +205,7 @@ export default function SmrPage() {
                 }} />
             </div>
             <span className="text-[10px] font-mono ml-auto" style={{ color: "var(--c-text-4)" }}>
-              {fmtNum(filtered.length)} из {fmtNum(rows.length)}
+              {fmtNum(filtered.length)} из {fmtNum(smrRows.length)}
             </span>
           </div>
 
