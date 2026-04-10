@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { Home, MapPin, Building2, Radio, FileText, HardHat, ShieldCheck, CheckCircle2, Zap, Satellite } from "lucide-react";
+import { Home, Radio, FileText, HardHat, ShieldCheck, CheckCircle2, Satellite } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import PageHeader from "@/components/common/PageHeader";
 import KpiCard from "@/components/common/KpiCard";
@@ -12,7 +12,7 @@ import { useSmr } from "@/hooks/useSmr";
 import { useGU } from "@/hooks/useGU";
 import { useVols } from "@/hooks/useVols";
 import { useSvod } from "@/hooks/useSvod";
-import { fmtNum, uniq, computeGuKpi } from "@/lib/dataHelpers";
+import { fmtNum, computeGuKpi } from "@/lib/dataHelpers";
 import { PirRow, SmrRow, SvodRow } from "@/lib/types";
 
 const PIE_COLORS = [
@@ -51,19 +51,29 @@ export default function HomePage() {
   const svodStats = useMemo(() => {
     const s = {
       total: svodRows.length,
-      vols: 0,
-      volsWifi: 0,
-      sputnik: 0,
+      vols: 0,        // ВОЛС + ВОЛС (Wi-Fi public)
+      sputnik: 0,     // Спутник
       connectedSnp: 0,
-      connectedObjects: 0,
+      connectedVols: 0,      // ВОЛС подключено (без «временно спутник»)
+      tempSputnik: 0,        // временно спутник (доп. статус)
+      connectedSputnik: 0,   // Спутник подключено
+      connectedObjects: 0,   // сумма objectsConnectedFact
       byYear: { 2025: 0, 2026: 0, 2027: 0 } as Record<number, number>,
       connectedByYear: { 2025: 0, 2026: 0, 2027: 0 } as Record<number, number>,
     };
     for (const r of svodRows) {
-      if (r.tech === "vols") s.vols++;
-      else if (r.tech === "vols_wifi_public") s.volsWifi++;
-      else if (r.tech === "sputnik") s.sputnik++;
-      if (r.status === "connected") s.connectedSnp++;
+      const isSputnikTech = r.tech === "sputnik";
+      if (!isSputnikTech) s.vols++;   // ВОЛС + Wi-Fi public → всё = ВОЛС
+      else s.sputnik++;
+
+      const isConn = r.status === "connected";
+      const isTemp = r.extraStatus.toLowerCase().includes("временно спутник");
+
+      if (isConn) s.connectedSnp++;
+      if (isTemp) s.tempSputnik++;
+      if (isConn && !isSputnikTech && !isTemp) s.connectedVols++;
+      if (isConn && isSputnikTech) s.connectedSputnik++;
+
       s.connectedObjects += r.objectsConnectedFact;
       if (r.year && s.byYear[r.year] !== undefined) s.byYear[r.year]++;
       if (r.year && r.status === "connected" && s.connectedByYear[r.year] !== undefined) {
@@ -75,15 +85,6 @@ export default function HomePage() {
 
   // Количество СНП = ВОЛС + Спутник (все технологии — "ВОЛС (Wi-Fi public)" тоже считается ВОЛС)
   const totalSnp = svodStats.total > 0 ? svodStats.total : pirRows.length;
-  const regionsCount = useMemo(
-    () => uniq((svodRows.length ? svodRows : pirRows).map(r => r.region)).filter(Boolean).length,
-    [svodRows, pirRows]
-  );
-  const districtsCount = useMemo(
-    () => uniq((svodRows.length ? svodRows : pirRows).map(r => r.district)).filter(Boolean).length,
-    [svodRows, pirRows]
-  );
-
   const totalVolsKm = volsData.totals.total;
 
   // ─── Процентные показатели ────────────────────────────
@@ -180,82 +181,77 @@ export default function HomePage() {
         onRefresh={onRefresh}
       />
 
-      {/* Первый ряд — объёмные показатели (свод ВОЛС + Спутник) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+      {/* Ряд 1 — Количество СНП / ВОЛС / Спутник */}
+      <div className="grid grid-cols-3 gap-3 mb-3">
         <KpiCard
           label="Количество СНП"
           value={fmtNum(totalSnp)}
-          hint={
-            svodStats.total > 0
-              ? `ВОЛС ${fmtNum(svodStats.vols)} · Wi-Fi public ${fmtNum(svodStats.volsWifi)} · Спутник ${fmtNum(svodStats.sputnik)}`
-              : "всего населённых пунктов"
-          }
+          hint="ВОЛС + Спутник"
           icon={Home}
           color="#10b981"
-          href="/pir-psd"
+          href="/svod"
         />
         <KpiCard
-          label="Общая протяжённость ВОЛС"
-          value={`${fmtNum(Math.round(totalVolsKm))} км`}
-          hint={`2026: ${fmtNum(Math.round(volsData.totals.year2026))} · 2027: ${fmtNum(Math.round(volsData.totals.year2027))} км`}
+          label="ВОЛС"
+          value={fmtNum(svodStats.vols)}
+          hint="ВОЛС + ВОЛС (Wi-Fi public)"
           icon={Radio}
           color="#06b6d4"
-          href="/smr"
+          href="/svod?tech=vols"
         />
         <KpiCard
-          label="Количество областей"
-          value={fmtNum(regionsCount)}
-          hint="регионов в проекте"
-          icon={MapPin}
-          color="#f59e0b"
-          href="/pir-psd"
-        />
-        <KpiCard
-          label="Количество районов"
-          value={fmtNum(districtsCount)}
-          hint="административных"
-          icon={Building2}
+          label="Спутник"
+          value={fmtNum(svodStats.sputnik)}
+          hint="спутниковая технология"
+          icon={Satellite}
           color="#8b5cf6"
-          href="/pir-psd"
+          href="/svod?tech=sputnik"
         />
       </div>
 
-      {/* Подключено — сёла и объекты, в разрезе по годам */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-3">
+      {/* Ряд 2 — Подключено СНП / Разбивка / Объекты */}
+      <div className="grid grid-cols-3 gap-3 mb-3">
         <KpiCard
-          label="Подключено сёл"
-          value={fmtNum(svodStats.connectedSnp)}
+          label="Из них подключено"
+          value={`${fmtNum(svodStats.connectedSnp)} СНП`}
           hint={`${svodStats.total ? ((svodStats.connectedSnp / svodStats.total) * 100).toFixed(1) : "0"}% от плана`}
           icon={CheckCircle2}
           color="#22c55e"
+          href="/svod?status=connected"
         />
+        {/* Кастомная карточка: разбивка подключённых */}
+        <div
+          className="rounded-lg p-4 flex flex-col items-center justify-center text-center"
+          style={{ background: "var(--c-bg-1)", border: "1px solid var(--c-border)" }}
+        >
+          <div className="text-[11px] uppercase tracking-wider font-semibold mb-2" style={{ color: "var(--c-text-3)" }}>
+            Разбивка подключённых
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center justify-center gap-2">
+              <span className="w-2 h-2 rounded-full" style={{ background: "#06b6d4" }} />
+              <span className="text-sm font-bold" style={{ color: "var(--c-text-1)" }}>{fmtNum(svodStats.connectedVols)}</span>
+              <span className="text-xs" style={{ color: "var(--c-text-3)" }}>ВОЛС</span>
+            </div>
+            <div className="flex items-center justify-center gap-2">
+              <span className="w-2 h-2 rounded-full" style={{ background: "#f59e0b" }} />
+              <span className="text-sm font-bold" style={{ color: "var(--c-text-1)" }}>{fmtNum(svodStats.tempSputnik)}</span>
+              <span className="text-xs" style={{ color: "var(--c-text-3)" }}>временно спутник</span>
+            </div>
+            <div className="flex items-center justify-center gap-2">
+              <span className="w-2 h-2 rounded-full" style={{ background: "#8b5cf6" }} />
+              <span className="text-sm font-bold" style={{ color: "var(--c-text-1)" }}>{fmtNum(svodStats.connectedSputnik)}</span>
+              <span className="text-xs" style={{ color: "var(--c-text-3)" }}>спутник</span>
+            </div>
+          </div>
+        </div>
         <KpiCard
-          label="Подключено объектов"
+          label="Подключено объектов (ГУ/БО)"
           value={fmtNum(svodStats.connectedObjects)}
           hint="факт по госучреждениям / бюджетным"
           icon={ShieldCheck}
           color="#10b981"
-        />
-        <KpiCard
-          label="СНП 2025"
-          value={fmtNum(svodStats.byYear[2025] ?? 0)}
-          hint={`подключено: ${fmtNum(svodStats.connectedByYear[2025] ?? 0)}`}
-          icon={Zap}
-          color="#f59e0b"
-        />
-        <KpiCard
-          label="СНП 2026"
-          value={fmtNum(svodStats.byYear[2026] ?? 0)}
-          hint={`подключено: ${fmtNum(svodStats.connectedByYear[2026] ?? 0)}`}
-          icon={Zap}
-          color="#06b6d4"
-        />
-        <KpiCard
-          label="СНП 2027"
-          value={fmtNum(svodStats.byYear[2027] ?? 0)}
-          hint={`подключено: ${fmtNum(svodStats.connectedByYear[2027] ?? 0)}`}
-          icon={Satellite}
-          color="#8b5cf6"
+          href="/svod?status=connected"
         />
       </div>
 
