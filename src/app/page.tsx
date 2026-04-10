@@ -219,39 +219,28 @@ export default function HomePage() {
           color="#22c55e"
           href="/svod?status=connected"
         />
-        {/* Технология подключения */}
+        {/* Технология подключения — симметрично с KpiCard */}
         <div
-          className="rounded-lg p-4 flex flex-col"
+          className="rounded-lg p-4 flex flex-col items-center justify-center text-center"
           style={{ background: "var(--c-bg-1)", border: "1px solid var(--c-border)" }}
         >
-          <div className="text-[11px] uppercase tracking-wider font-semibold mb-3 text-center" style={{ color: "var(--c-text-3)" }}>
+          <div className="text-[11px] uppercase tracking-wider font-semibold mb-3" style={{ color: "var(--c-text-3)" }}>
             Технология подключения
           </div>
-          <div className="flex-1 flex flex-col justify-center gap-2.5">
+          <div className="flex items-center justify-center gap-6">
             {[
-              { label: "ВОЛС", value: svodStats.connectedVols, color: "#06b6d4", total: svodStats.connectedSnp },
-              { label: "Временно спутник", value: svodStats.tempSputnik, color: "#f59e0b", total: svodStats.connectedSnp },
-              { label: "Спутник", value: svodStats.connectedSputnik, color: "#8b5cf6", total: svodStats.connectedSnp },
+              { label: "ВОЛС", value: svodStats.connectedVols, color: "#06b6d4" },
+              { label: "Врем. спутник", value: svodStats.tempSputnik, color: "#f59e0b" },
+              { label: "Спутник", value: svodStats.connectedSputnik, color: "#8b5cf6" },
             ].map((item) => (
-              <div key={item.label}>
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: item.color }} />
-                    <span className="text-xs font-medium" style={{ color: "var(--c-text-2)" }}>{item.label}</span>
-                  </div>
-                  <span className="text-sm font-bold tabular-nums" style={{ color: "var(--c-text-1)" }}>{fmtNum(item.value)}</span>
-                </div>
-                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--c-bg-2)" }}>
-                  <div
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{
-                      background: item.color,
-                      width: `${item.total ? (item.value / item.total) * 100 : 0}%`,
-                    }}
-                  />
-                </div>
+              <div key={item.label} className="flex flex-col items-center gap-1">
+                <span className="text-2xl font-extrabold tabular-nums" style={{ color: item.color }}>{fmtNum(item.value)}</span>
+                <span className="text-[10px] font-medium" style={{ color: "var(--c-text-3)" }}>{item.label}</span>
               </div>
             ))}
+          </div>
+          <div className="text-[10px] mt-2" style={{ color: "var(--c-text-4)" }}>
+            всего {fmtNum(svodStats.connectedSnp)} подключённых
           </div>
         </div>
         <KpiCard
